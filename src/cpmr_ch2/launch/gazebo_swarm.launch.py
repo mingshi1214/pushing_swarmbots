@@ -1,19 +1,18 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 import xacro
-
 
 def generate_launch_description():
     urdf = os.path.join(get_package_share_directory('cpmr_apb'), f'blockrobot.urdf.xacro')
-    # with open(urdf, 'r') as infp:
-    #     robot_desc= infp.read()
 
-    # Spawn five robots in Gazebo
+    # Spawn 3 robots in Gazebo
     nodelist = []
     for i in range(0, 3):
         robot_name = f"block_robot_{i}"
@@ -43,12 +42,14 @@ def generate_launch_description():
                            '-Y', '0']
             )
         )
-
-    return LaunchDescription([
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')
-            ),
-        ),
-        *nodelist  # Unpack and add all spawn actions
-    ])
+        
+    ld = LaunchDescription([
+            DeclareLaunchArgument(
+                name='world',
+                default_value="src/cpmr_ch2/worlds/world",
+                description='Full path to the world model file to load'),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')),
+                launch_arguments={'world': LaunchConfiguration('world')}.items()),
+            *nodelist])
+    return ld

@@ -90,6 +90,12 @@ def make_obstacle(node, id, x0, y0, h, r):
                </visual>				\
              </link>                                    \
            </model>					\
+           <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so"> \
+            <ros>\
+              <namespace>/gazebo</namespace>\
+            </ros>\
+            <update_rate>1.0</update_rate>\
+          </plugin>
          </world>                                       \
        </sdf>"""
 
