@@ -46,7 +46,7 @@ def generate_launch_description():
     ld = LaunchDescription([
             DeclareLaunchArgument(
                 name='world',
-                default_value="src/cpmr_ch2/worlds/world",
+                default_value="src/cpmr_ch2/worlds/box",
                 description='Full path to the world model file to load'),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')),
