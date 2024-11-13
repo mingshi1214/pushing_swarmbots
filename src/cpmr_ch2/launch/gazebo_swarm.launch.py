@@ -12,9 +12,10 @@ import xacro
 def generate_launch_description():
     urdf = os.path.join(get_package_share_directory('cpmr_apb'), f'blockrobot.urdf.xacro')
 
-    # Spawn 3 robots in Gazebo
+    # Spawn 5 robots in Gazebo
     nodelist = []
-    for i in range(0, 3):
+    poselist = [[1.5, 1.4], [2.5, 1.4], [0.9, 2], [3.1, 2], [1.5, 2.6], [2.5, 2.6]]
+    for i in range(0, 6):
         robot_name = f"block_robot_{i}"
         robot_desc = xacro.process_file(urdf, mappings={'name' : robot_name}).toxml()
         nodelist.append(Node(
@@ -24,8 +25,8 @@ def generate_launch_description():
                 name='robot_state_publisher',
                 output='screen',
                 parameters=[{'use_sim_time': False, 
-                             'robot_description': robot_desc, 
-                             'frame_prefix': robot_name + "/"}],
+                                'robot_description': robot_desc, 
+                                'frame_prefix': robot_name + "/"}],
                 arguments=[urdf])
             )
         nodelist.append(
@@ -36,10 +37,33 @@ def generate_launch_description():
                 name='urdf_spawner',
                 output='screen',
                 arguments=["-topic", "/" + robot_name + "/robot_description",  
-                           "-entity", robot_name, 
-                           "-x", str(i * 2.0), 
-                           '-y', '0', 
-                           '-Y', '0']
+                            "-entity", robot_name, 
+                            "-x", str(poselist[i][0]), 
+                            '-y', str(poselist[i][1]), 
+                            '-Y', '0']
+            )
+        )
+        nodelist.append(DeclareLaunchArgument(f'goal_x_{robot_name}', default_value = str(poselist[i][0]+3.0), description = 'goal (x)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = str(poselist[i][1]+3.0), description = 'goal (y)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '0.0', description = 'goal (t)'))
+        nodelist.append(DeclareLaunchArgument(f'max_vel_{robot_name}', default_value = '1.0', description = 'max (v)'))
+        nodelist.append(DeclareLaunchArgument(f'vel_gain_{robot_name}', default_value = '0.2', description = 'controller gain'))
+        nodelist.append(
+            Node(
+                namespace=robot_name,
+                package='cpmr_ch2',
+                executable='drive_to_goal',
+                name='drive_to_goal',
+                # output="screen",
+                remappings=[('/odom', '/'+robot_name+"/odom"),
+                            ('/cmd_vel', "/"+robot_name+"/cmd_vel")],
+                parameters = [
+                {'goal_x' : LaunchConfiguration(f'goal_x_{robot_name}')},
+                {'goal_y' : LaunchConfiguration(f'goal_y_{robot_name}')},
+                {'goal_t' : LaunchConfiguration(f'goal_t_{robot_name}')},
+                {'max_vel' : LaunchConfiguration(f'max_vel_{robot_name}')},
+                {'vel_gain' : LaunchConfiguration(f'vel_gain_{robot_name}')}
+            ]
             )
         )
         

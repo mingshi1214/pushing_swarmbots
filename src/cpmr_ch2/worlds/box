@@ -137,7 +137,7 @@
       <static>0</static>
       <link name='link'>
         <inertial>
-          <mass>1</mass>
+          <mass>5</mass>
           <inertia>
             <ixx>0.166667</ixx>
             <ixy>0</ixy>
@@ -180,11 +180,5 @@
         <kinematic>0</kinematic>
       </link>
     </model>
-    <!-- <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
-      <ros>
-        <namespace>/gazebo</namespace>
-      </ros>
-      <update_rate>1.0</update_rate>
-    </plugin> -->
   </world>
 </sdf>

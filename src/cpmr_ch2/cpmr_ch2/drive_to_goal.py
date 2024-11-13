@@ -7,6 +7,7 @@ from rcl_interfaces.msg import SetParametersResult
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
+import time 
 
 def euler_from_quaternion(quaternion):
     """
@@ -45,6 +46,7 @@ class MoveToGoal(Node):
         self._goal_t = 0.0
         self._vel_gain = 50.0
         self._max_vel = 0.4
+        self.d_thresh = 0.2
 
         self.add_on_set_parameters_callback(self.parameter_callback)
         self.declare_parameter('goal_x', value=self._goal_x)
@@ -52,6 +54,8 @@ class MoveToGoal(Node):
         self.declare_parameter('goal_t', value=self._goal_t)
         self.declare_parameter('max_vel', value=self._max_vel)
         self.declare_parameter('vel_gain', value=self._vel_gain)
+
+        time.sleep(2)
 
         self._subscriber = self.create_subscription(Odometry, "/odom", self._listener_callback, 1)
         self._publisher = self.create_publisher(Twist, "/cmd_vel", 1)
@@ -79,25 +83,32 @@ class MoveToGoal(Node):
             y = y_diff * self._vel_gain
             t_x = x * math.cos(cur_t) + y * math.sin(cur_t)
             t_y = -x * math.sin(cur_t) + y * math.cos(cur_t)
-            
-            # don't need to check for max vel now. Will always scale to 0.4 mag
+
             vel_mag = np.sqrt((t_x)**2 + (t_y)**2)
-            vel_p_diff = (self._max_vel - vel_mag)/vel_mag
-            if vel_mag > self._max_vel:
-                x = t_x * (1 + vel_p_diff)
-                y = t_y * (1 + vel_p_diff)
+
+            if dist < self.d_thresh:
+                # don't need to check for max vel now. Will always scale to 0.4 mag
+                vel_mag = np.sqrt((t_x)**2 + (t_y)**2)
+                vel_p_diff = (self._max_vel - vel_mag)/(vel_mag)
+                if vel_mag > self._max_vel:
+                    x = t_x * (1 + vel_p_diff)
+                    y = t_y * (1 + vel_p_diff)
+                else:
+                    x = t_x
+                    y = t_y
             else:
-                x = t_x
-                y = t_y
+                normed = np.array([t_x, t_y])/np.linalg.norm(np.array([t_x, t_y]))
+                t_x = normed[0] * self._max_vel
+                t_y = normed[1] * self._max_vel
 
             curr_mag = np.sqrt((x)**2 + (y)**2)
-            self.get_logger().info(f"vel mag {vel_mag}, vel dif {vel_p_diff}, x {x}, y {y}, t_x {t_x}, t_y {t_y}, curr mag {curr_mag}")
+            # self.get_logger().info(f"vel mag {vel_mag}, vel dif {vel_p_diff}, x {x}, y {y}, t_x {t_x}, t_y {t_y}, curr mag {curr_mag}")
 
             t = max(min(t_diff * self._vel_gain, self._max_vel), -self._max_vel)
             twist.linear.x = x 
             twist.linear.y = y 
             twist.angular.z = t
-            self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t}) goal ({self._goal_x},{self._goal_y},{self._goal_t})")
+            # self.get_logger().info(f"at ({cur_x},{cur_y},{cur_t}) goal ({self._goal_x},{self._goal_y},{self._goal_t})")
         self._publisher.publish(twist)
 
     def parameter_callback(self, params):
