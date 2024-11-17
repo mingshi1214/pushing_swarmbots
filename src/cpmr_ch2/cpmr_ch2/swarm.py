@@ -71,6 +71,8 @@ class MoveToGoal(Node):
         self._prev_state = FSM_STATES.AT_START
         self._start_time = self.get_clock().now().nanoseconds * 1e-9
 
+        self._rel_pose_pushing_threshold = 0.06 #m
+
         self._box = pose(2.0, 2.0, 0.0)
 
         self.add_on_set_parameters_callback(self.parameter_callback)
@@ -185,9 +187,8 @@ class MoveToGoal(Node):
         curr_pose_rel_box.x = self._box.x - self._pose.x
         curr_pose_rel_box.y = self._box.y - self._pose.y
 
-        threshold = 0.06
-        if ((abs(curr_pose_rel_box.x - self._pose_rel_box.x) > threshold) or 
-            (abs(curr_pose_rel_box.y - self._pose_rel_box.y) > threshold)):
+        if ((abs(curr_pose_rel_box.x - self._pose_rel_box.x) > self._rel_pose_pushing_threshold) or 
+            (abs(curr_pose_rel_box.y - self._pose_rel_box.y) > self._rel_pose_pushing_threshold)):
             #get the correct pose on the box
             maintained_pose = pose()
             maintained_pose.x = self._box.x - self._pose_rel_box.x
