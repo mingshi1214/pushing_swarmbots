@@ -47,7 +47,7 @@
   <link name="base_link">
     <visual>
       <geometry>
-        <cylinder length="0.1" radius="0.10" />
+        <cylinder length="0.15" radius="0.10" />
       </geometry>
       <!-- <geometry>
         <box size="0.10 0.10 0.05" />

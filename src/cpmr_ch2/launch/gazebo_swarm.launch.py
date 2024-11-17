@@ -14,7 +14,7 @@ def generate_launch_description():
 
     # Spawn 5 robots in Gazebo
     nodelist = []
-    poselist = [[1.5, 1.4], [2.5, 1.4], [0.9, 2], [3.1, 2], [1.5, 2.6], [2.5, 2.6]]
+    poselist = [[1.5, 1.35], [2.5, 1.35], [0.85, 2], [3.15, 2], [1.5, 2.65], [2.5, 2.65]]
     for i in range(0, 6):
         robot_name = f"block_robot_{i}"
         robot_desc = xacro.process_file(urdf, mappings={'name' : robot_name}).toxml()
@@ -46,15 +46,15 @@ def generate_launch_description():
         nodelist.append(DeclareLaunchArgument(f'goal_x_{robot_name}', default_value = str(poselist[i][0]+3.0), description = 'goal (x)'))
         nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = str(poselist[i][1]+3.0), description = 'goal (y)'))
         nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '0.0', description = 'goal (t)'))
-        nodelist.append(DeclareLaunchArgument(f'max_vel_{robot_name}', default_value = '1.0', description = 'max (v)'))
+        nodelist.append(DeclareLaunchArgument(f'max_vel_{robot_name}', default_value = '0.5', description = 'max (v)'))
         nodelist.append(DeclareLaunchArgument(f'vel_gain_{robot_name}', default_value = '0.2', description = 'controller gain'))
         nodelist.append(
             Node(
                 namespace=robot_name,
                 package='cpmr_ch2',
-                executable='drive_to_goal',
-                name='drive_to_goal',
-                # output="screen",
+                executable='swarm',
+                name='swarm',
+                output="screen",
                 remappings=[('/odom', '/'+robot_name+"/odom"),
                             ('/cmd_vel', "/"+robot_name+"/cmd_vel")],
                 parameters = [
