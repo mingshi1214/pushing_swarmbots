@@ -164,33 +164,51 @@ class MoveToGoal(Node):
         d_self2goal = distance(self._pose.x, self._pose.y, self._goal.x, self._goal.y)
         d_box2goal = distance(self._box.x, self._box.y, self._goal.x, self._goal.y)
 
+        # set initial distance from box and maintain it
+        self._pose_rel_box.x = self._box.x - self._pose.x
+        self._pose_rel_box.y = self._box.y - self._pose.y
+
         if d_self2goal>d_box2goal:
             self.get_logger().info(f"I am pushing. me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self._prev_state = FSM_STATES.AT_START
             self._cur_state = FSM_STATES.PUSHING
         else:
             self.get_logger().info(f"I am following. me2goal: {d_self2goal}, box2goal: {d_box2goal}")
-            # set initial distance from box and maintain it
-            self._pose_rel_box.x = self._box.x - self._pose.x
-            self._pose_rel_box.y = self._box.y - self._pose.y
             self._prev_state = FSM_STATES.AT_START
             self._cur_state = FSM_STATES.FOLLOWING
             time.sleep(1.0) # wait so that the pushing can happen first
         return
     
     def _do_state_pushing(self):
-        # push the box
-        self._drive_to_goal()
+        # check if we're too far from our initial relative position
+        curr_pose_rel_box = pose()
+        curr_pose_rel_box.x = self._box.x - self._pose.x
+        curr_pose_rel_box.y = self._box.y - self._pose.y
+
+        threshold = 0.06
+        if ((abs(curr_pose_rel_box.x - self._pose_rel_box.x) > threshold) or 
+            (abs(curr_pose_rel_box.y - self._pose_rel_box.y) > threshold)):
+            #get the correct pose on the box
+            maintained_pose = pose()
+            maintained_pose.x = self._box.x - self._pose_rel_box.x
+            maintained_pose.y = self._box.y - self._pose_rel_box.y
+
+            #ignore the default max pose error because we want to be precise on the box for pushing
+            self._drive_to_goal(maintained_pose, 0.0)
+        else:
+            # push the box
+            self._drive_to_goal(self._goal)
+
         return
     
     def _do_state_following(self):
         # follow the box
         # set new goals depending on where the box is
-        self.get_logger().info(f"I am following. initial goal:{self._goal.x} {self._goal.y}")
+        # self.get_logger().info(f"I am following. initial goal:{self._goal.x} {self._goal.y}")
         self._goal.x = self._box.x - self._pose_rel_box.x
         self._goal.y = self._box.y - self._pose_rel_box.y
-        self.get_logger().info(f"I am following. new goal:{self._goal.x} {self._goal.y}")
-        self._drive_to_goal()
+        # self.get_logger().info(f"I am following. new goal:{self._goal.x} {self._goal.y}")
+        self._drive_to_goal(self._goal)
         return
     
     def _do_state_task_done(self):
@@ -198,12 +216,12 @@ class MoveToGoal(Node):
 
         return
 
-    def _drive_to_goal(self, max_pos_err=0.05):
-        t_diff = self._goal.t - self._pose.t 
+    def _drive_to_goal(self, goal, max_pos_err=0.05):
+        t_diff = goal.t - self._pose.t 
         
-        x_diff = self._goal.x - self._pose.x
-        y_diff = self._goal.y - self._pose.y
-        dist = distance(self._pose.x, self._pose.y, self._goal.x, self._goal.y)
+        x_diff = goal.x - self._pose.x
+        y_diff = goal.y - self._pose.y
+        dist = distance(self._pose.x, self._pose.y, goal.x, goal.y)
 
         twist = Twist()
         if dist > max_pos_err:
