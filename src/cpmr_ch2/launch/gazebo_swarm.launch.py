@@ -43,9 +43,11 @@ def generate_launch_description():
                             '-Y', '0']
             )
         )
-        nodelist.append(DeclareLaunchArgument(f'goal_x_{robot_name}', default_value = str(poselist[i][0]+3.0), description = 'goal (x)'))
-        nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = str(poselist[i][1]+3.0), description = 'goal (y)'))
-        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '0.0', description = 'goal (t)'))
+        # nodelist.append(DeclareLaunchArgument(f'goal_x_{robot_name}', default_value = str(poselist[i][0]+3.0), description = 'goal (x)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_x_{robot_name}', default_value = '0.0', description = 'goal (x)'))
+        # nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = str(poselist[i][1]+3.0), description = 'goal (y)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = '0.0', description = 'goal (y)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '1.57', description = 'goal (t)'))
         nodelist.append(DeclareLaunchArgument(f'max_vel_{robot_name}', default_value = '0.5', description = 'max (v)'))
         nodelist.append(DeclareLaunchArgument(f'vel_gain_{robot_name}', default_value = '0.2', description = 'controller gain'))
         nodelist.append(
