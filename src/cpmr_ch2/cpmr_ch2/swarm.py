@@ -6,6 +6,7 @@ from rclpy.parameter import Parameter
 from rcl_interfaces.msg import SetParametersResult
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
+from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from gazebo_msgs.srv import GetEntityState
 from enum import Enum
@@ -62,7 +63,7 @@ def distance(x0, y0, x1, y1):
 
 class SwarmRobot(Node):
 
-    Rel_Pose_Pushing_Threshold = 0.06 #m
+    Rel_Pose_Pushing_Threshold = 0.04 #m
     Object_Trans_Goal_Threshold = 0.2 #m
     Object_Rot_Goal_Threshold = 0.1 #rads
 
@@ -72,6 +73,7 @@ class SwarmRobot(Node):
         self.get_logger().info(f'{self.get_name()} created')
 
         self._goal = pose()
+        self._driving_goal = pose() # only used for diagnosis for now
         self._robot_goal = pose()
         self._vel_gain = 50.0
         self._max_vel = 0.4
@@ -84,6 +86,8 @@ class SwarmRobot(Node):
         self._box = pose(2.0, 2.0, 0.0)
         self._box_init = pose(self._box.x, self._box.y, self._box.t)
 
+        self._is_adjust = False
+
         self.add_on_set_parameters_callback(self.parameter_callback)
         self.declare_parameter('goal_x', value=self._goal.x)
         self.declare_parameter('goal_y', value=self._goal.y)
@@ -91,8 +95,9 @@ class SwarmRobot(Node):
         self.declare_parameter('max_vel', value=self._max_vel)
         self.declare_parameter('vel_gain', value=self._vel_gain)
 
-        self._odom_sub = self.create_subscription(Odometry, "/odom", self._listener_callback, 1)
-        self._cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 1)
+        self._odom_sub = self.create_subscription(Odometry, "/odom", self._listener_callback, 5)
+        self._cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 5)
+        self._diagnosis_pub = self.create_publisher(String, "/diagnosis", 5)
 
         self._cli = self.create_client(GetEntityState, '/gazebo/get_entity_state')
         while not self._cli.wait_for_service(timeout_sec=1.0):
@@ -151,6 +156,7 @@ class SwarmRobot(Node):
             roll, pitch, self._box.t = euler_from_quaternion(o)
 
         # self.get_logger().info(f'going to state machine')
+        self._diagnosis()
         self._state_machine()
 
     def _state_machine(self):
@@ -189,6 +195,7 @@ class SwarmRobot(Node):
         self._pose_rel_box.x = self._box.x - self._pose.x
         self._pose_rel_box.y = self._box.y - self._pose.y
 
+        #TODO maybe worth it to have it be able to transition between pushing and following? (well if they do it right the first time, not necessary)
         if d_self2goal>d_box2goal:
             self.get_logger().info(f"I am pushing. me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self._cur_state = FSM_STATES.PUSHING_TRANS
@@ -215,11 +222,13 @@ class SwarmRobot(Node):
             maintained_pose = pose()
             maintained_pose.x = self._box.x - self._pose_rel_box.x
             maintained_pose.y = self._box.y - self._pose_rel_box.y
+            self._is_adjust = True
 
             #ignore the default max pose error because we want to be precise on the box for pushing
             self._drive_to_goal(maintained_pose, 0.0)
         else:
             # push the box
+            self._is_adjust = False
             self._drive_to_goal(self._robot_goal)
 
         return
@@ -258,6 +267,7 @@ class SwarmRobot(Node):
         curr_pose_rel_box.y = self._box.y - self._pose.y
 
         # rotate our initial position based on the box's rotation
+        # initial pose ref frame
         rotated_rel_pose = self._rotate_point_about_origin(self._pose_rel_box, self._box.t)
 
         if ((abs(curr_pose_rel_box.x - rotated_rel_pose.x) > SwarmRobot.Rel_Pose_Pushing_Threshold) or 
@@ -267,14 +277,19 @@ class SwarmRobot(Node):
             maintained_pose.x = self._box.x - maintained_pose.x
             maintained_pose.y = self._box.y - maintained_pose.y
 
+            self._is_adjust = True
+
             #ignore the default max pose error because we want to be precise on the box for pushing
             self._drive_to_goal(maintained_pose, 0.0)
         else:
             # push the box
+            # TODO: check if this breaks for big rotations (I think assuming going in a line rn? maybe time to do waypoints?)
             temp = self._rotate_point_about_origin(self._pose_rel_box, self._goal.t)
 
             temp.x = self._box.x - temp.x
             temp.y = self._box.y - temp.y
+
+            self._is_adjust = False
 
             self._drive_to_goal(temp)
 
@@ -290,6 +305,9 @@ class SwarmRobot(Node):
         return
 
     def _drive_to_goal(self, goal, max_pos_err=0.05):
+        self._driving_goal.x = goal.x
+        self._driving_goal.y = goal.y
+        self._driving_goal.t = goal.t
         t_diff = goal.t - self._pose.t 
         
         x_diff = goal.x - self._pose.x
@@ -321,6 +339,13 @@ class SwarmRobot(Node):
         adjusted.y = (point.x * math.sin(radians)) + (point.y * math.cos(radians))
 
         return adjusted
+    
+    def _diagnosis(self):
+        diagnosis = String()
+        diagnosis.data = f"pose wrt world: {round(self._pose.x, 3)}, {round(self._pose.y, 3)}, {round(self._pose.t, 3)} pose wrt box: {round(self._box.x - self._pose.x, 3)}, {round(self._box.y - self._pose.y, 3)} init pose wrt box: {round(self._pose_rel_box.x, 3)}, {round(self._pose_rel_box.x, 3)} is adjust: {self._is_adjust} box pose: {round(self._box.x, 3)}, {round(self._box.y, 3)}, {round(self._box.t, 3)} driving goal: {round(self._driving_goal.x, 3)}, {round(self._driving_goal.y, 3)}, {round(self._driving_goal.t, 3)}\n"
+        
+        self._diagnosis_pub.publish(diagnosis)
+        return
     
 def main(args=None):
     

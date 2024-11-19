@@ -1,0 +1,6 @@
+string pose_wrt_world
+string pose_wrt_box
+string init_pose_wrt_box
+string is_adjust
+string box_pose
+string driving_goal
