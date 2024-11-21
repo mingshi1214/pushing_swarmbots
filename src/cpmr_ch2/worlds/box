@@ -125,6 +125,20 @@
       </ros>
       <update_rate>1.0</update_rate>
     </plugin>
+    <plugin name="p3d_base_footprint" filename="libgazebo_ros_p3d.so">
+      <ros>
+        <namespace>unit_box_pd3</namespace>
+        <remapping>odom:=unit_box/odom</remapping>
+      </ros>
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <body_name>unit_box</body_name>
+      <frame_name>world</frame_name>
+
+      <gaussian_noise>0.00</gaussian_noise>
+      <xyz_offset>0 0 0</xyz_offset>
+      <rpy_offset>0 0 0</rpy_offset>
+    </plugin>
     <gui fullscreen='0'>
       <camera name='user_camera'>
         <pose>5.21329 -4.985 4.67899 0 0.535644 2.04819</pose>
