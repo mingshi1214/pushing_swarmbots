@@ -5,10 +5,10 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rcl_interfaces.msg import SetParametersResult
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist, Pose, Point, Quaternion
-from std_msgs.msg import String
+from geometry_msgs.msg import Twist
+from std_msgs.msg import String, Int32, Bool
 from nav_msgs.msg import Odometry
-from gazebo_msgs.srv import GetEntityState
+from gazebo_msgs.msg import ModelStates
 from enum import Enum
 import time
 
@@ -19,6 +19,7 @@ class FSM_STATES(Enum):
     START_ROT = 'Start Rotation',
     PUSHING_ROT = 'Pushing to rotation goal',
     FOLLOWING_ROT = 'Following the box rotation',
+    WAYPOINT_DONE = 'Waypoint Done',
     TASK_DONE = 'Task Done'
 
 
@@ -61,11 +62,20 @@ def distance(x0, y0, x1, y1):
     dist = math.sqrt(x_diff * x_diff + y_diff * y_diff)
     return dist
 
+def assign_waypoints(x, y, t):
+    # make waypoints a list of pose objects [pose0, pose1, ...]
+    waypoints = []
+    for i in range(len(x)):
+        waypoints.append(pose(x[i], y[i], t[i]))
+    
+    return waypoints
+
+
 class SwarmRobot(Node):
 
-    Rel_Pose_Pushing_Threshold = 0.04 #m
-    Object_Trans_Goal_Threshold = 0.2 #m
-    Object_Rot_Goal_Threshold = 0.1 #rads
+    Rel_Pose_Pushing_Threshold = 0.07 #m
+    Object_Trans_Goal_Threshold = 0.1 #m
+    Object_Rot_Goal_Threshold = 0.02 #rads
 
 
     def __init__(self):
@@ -88,32 +98,43 @@ class SwarmRobot(Node):
 
         self._is_adjust = False
 
+        self._all_at_waypoint = False
+
+        self._x_list, self._y_list, self._t_list = None, None, None
         self.add_on_set_parameters_callback(self.parameter_callback)
-        self.declare_parameter('goal_x', value=self._goal.x)
-        self.declare_parameter('goal_y', value=self._goal.y)
-        self.declare_parameter('goal_t', value=self._goal.t)
+        self.declare_parameter('goal_x', value=self._x_list)
+        self.declare_parameter('goal_y', value=self._y_list)
+        self.declare_parameter('goal_t', value=self._t_list)
         self.declare_parameter('max_vel', value=self._max_vel)
         self.declare_parameter('vel_gain', value=self._vel_gain)
+        self._waypoints = assign_waypoints(self._x_list, self._y_list, self._t_list)
+        self._get_next_waypoint()
 
         self._odom_sub = self.create_subscription(Odometry, "/odom", self._listener_callback, 5)
+        self._obj_sub = self.create_subscription(ModelStates, "/gazebo/model_states", self._box_callback, 1)
+        self._swarm_waypoints_sub = self.create_subscription(Bool, "/all_same", self._waypoints_callback, 1) # listening to see if everyone is at their positions for the current waypoint
+        
         self._cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 5)
         self._diagnosis_pub = self.create_publisher(String, "/diagnosis", 5)
+        self._waypoints_pub = self.create_publisher(Int32, "/waypoints", 5)
 
-        self._cli = self.create_client(GetEntityState, '/gazebo/get_entity_state')
-        while not self._cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('service not available, waiting again...')
-        self._req = GetEntityState.Request()
-        self._client_futures = []
+        self._cnt = 0
+
+        # self._cli = self.create_client(GetEntityState, '/gazebo/get_entity_state')
+        # while not self._cli.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info('service not available, waiting again...')
+        # self._req = GetEntityState.Request()
+        # self._client_futures = []
 
     def parameter_callback(self, params):
         self.get_logger().info(f'move_robot_to_goal parameter callback')
         for param in params:
-            if param.name == 'goal_x' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal.x = param.value
-            elif param.name == 'goal_y' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal.y = param.value
-            elif param.name == 'goal_t' and param.type_ == Parameter.Type.DOUBLE:
-                self._goal.t = param.value
+            if param.name == 'goal_x' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
+                self._x_list = param.value
+            elif param.name == 'goal_y' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
+                self._y_list = param.value
+            elif param.name == 'goal_t' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
+                self._t_list = param.value
             elif param.name == 'max_vel' and param.type_ == Parameter.Type.DOUBLE:
                 self._max_vel = param.value
             elif param.name == 'vel_gain' and param.type_ == Parameter.Type.DOUBLE:
@@ -123,6 +144,18 @@ class SwarmRobot(Node):
                 return SetParametersResult(successful=False)
             self.get_logger().warn(f"Changing goal {self._goal.x} {self._goal.y} {self._goal.t}")
         return SetParametersResult(successful=True)
+    
+    def _waypoints_callback(self, msg):
+        self._all_at_waypoint = msg.data
+
+    def _box_callback(self, msg):
+        objs = msg.name
+        i = objs.index('unit_box')
+        box_pose = msg.pose[i]
+        self._box.x = box_pose.position.x
+        self._box.y = box_pose.position.y
+        o = box_pose.orientation
+        roll, pitch, self._box.t = euler_from_quaternion(o)
 
     def _listener_callback(self, msg):
         # listen to odom 
@@ -136,26 +169,29 @@ class SwarmRobot(Node):
         o = pose.orientation
         roll, pitch, self._pose.t = euler_from_quaternion(o)
 
-        # weird ros2 service client
-        self._req.name = 'unit_box'
-        self._client_futures.append(self._cli.call_async(self._req))
-        incomplete_futures = []
-        resp = None
-        for f in self._client_futures:
-            if f.done():
-                resp = f.result()
-            else:
-                incomplete_futures.append(f)
-        self._client_futures = incomplete_futures
+        # # weird ros2 service client
+        # self._req.name = 'unit_box'
+        # self._client_futures.append(self._cli.call_async(self._req))
+        # incomplete_futures = []
+        # resp = None
+        # for f in self._client_futures:
+        #     if f.done():
+        #         resp = f.result()
+        #     else:
+        #         incomplete_futures.append(f)
+        # self._client_futures = incomplete_futures
 
-        if resp != None:
-            box_pose = resp.state.pose
-            self._box.x = box_pose.position.x
-            self._box.y = box_pose.position.y
-            o = box_pose.orientation
-            roll, pitch, self._box.t = euler_from_quaternion(o)
+        # if resp != None:
+        #     box_pose = resp.state.pose
+        #     self._box.x = box_pose.position.x
+        #     self._box.y = box_pose.position.y
+        #     o = box_pose.orientation
+        #     roll, pitch, self._box.t = euler_from_quaternion(o)
 
         # self.get_logger().info(f'going to state machine')
+        way = Int32()
+        way.data = len(self._waypoints)
+        self._waypoints_pub.publish(way)
         self._diagnosis()
         self._state_machine()
 
@@ -172,6 +208,8 @@ class SwarmRobot(Node):
             self._do_state_pushing_rot()
         elif self._cur_state == FSM_STATES.FOLLOWING_ROT:
             self._do_state_following_rot()
+        elif self._cur_state == FSM_STATES.WAYPOINT_DONE:
+            self._do_state_waypoint_done()
         elif self._cur_state == FSM_STATES.TASK_DONE:
             self._do_state_task_done()
         else:
@@ -259,7 +297,12 @@ class SwarmRobot(Node):
 
     def _do_state_pushing_rot(self):
         if(abs(self._box.t - (self._box_init.t + self._goal.t)) <= SwarmRobot.Object_Rot_Goal_Threshold):
-            self._cur_state = FSM_STATES.TASK_DONE
+            # get next waypoint before saying the waypoint is done so we wait for everyone else to be ready for the next one.
+            # this lessens length of our waypoint list so that everyone else has to be done their current waypoint before 
+            # all_at_waypoint is true
+            self._get_next_waypoint(self) 
+            self._cur_state = FSM_STATES.WAYPOINT_DONE
+            return
 
         # check if we're too far from our initial relative position
         curr_pose_rel_box = pose()
@@ -296,6 +339,18 @@ class SwarmRobot(Node):
     def _do_state_following_rot(self):
         pass
     
+    def _do_state_waypoint_done(self):
+        # make sure motion is stopped 
+        # wait for others to get to their curr waypoint
+        # start up once their waypoint length is same as yours
+        if self._all_at_waypoint: 
+            # start up the process again
+            self._cur_state == FSM_STATES.START_TRANS
+        else:
+            # wait for everyone else
+            self._cmd_vel_pub.publish(Twist())
+        return
+    
     def _do_state_task_done(self):
         # make sure motion is stopped
         self._cmd_vel_pub.publish(Twist())
@@ -307,8 +362,6 @@ class SwarmRobot(Node):
     def _drive_to_goal(self, goal, max_pos_err=0.05):
         self._driving_goal.x = goal.x
         self._driving_goal.y = goal.y
-        self._driving_goal.t = goal.t
-        t_diff = goal.t - self._pose.t 
         
         x_diff = goal.x - self._pose.x
         y_diff = goal.y - self._pose.y
@@ -320,12 +373,20 @@ class SwarmRobot(Node):
             mag = np.sqrt((x_diff)**2 + (y_diff)**2)
             x = x_diff/mag * self._max_vel
             y = y_diff/mag * self._max_vel
+            
+            g0 = np.array([x, y])
+            # need to set in current robot frame (above is in robot init frame which is aligned with world frame in terms of rotation)
+            # robot rotates when getting dragged along block. do it in rotated robot frame
+            r_01 = np.array([[np.cos(self._pose.t), -np.sin(self._pose.t)],
+                            [np.sin(self._pose.t), np.cos(self._pose.t)]])
+            
+            g1 = r_01.T @ g0
 
             curr_mag = np.sqrt((x)**2 + (y)**2)
             # self.get_logger().info(f"vel mag {mag}, x {x}, y {y}, curr mag {curr_mag}")
 
-            twist.linear.x = x 
-            twist.linear.y = y 
+            twist.linear.x = g1[0] 
+            twist.linear.y = g1[1]
             
             # self.get_logger().info(f"at ({self._pose.x},{self._pose.y},{self._pose.t}) goal ({self._goal.x},{self._goal.y},{self._goal.t})")  
         # if abs(t_diff) > 0.1:
@@ -346,6 +407,13 @@ class SwarmRobot(Node):
         
         self._diagnosis_pub.publish(diagnosis)
         return
+    
+    def _get_next_waypoint(self):
+        # pop first index of waypoints only if there are more waypoints to go to
+        if len(self._waypoints) != 0:
+            self._goal = self._waypoints.pop(0)
+        else:
+            self._cur_state = FSM_STATES.TASK_DONE
     
 def main(args=None):
     

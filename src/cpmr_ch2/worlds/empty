@@ -91,10 +91,10 @@
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
     <state world_name='default'>
-      <sim_time>316 543000000</sim_time>
-      <real_time>29 722107929</real_time>
-      <wall_time>1731443656 333182415</wall_time>
-      <iterations>29242</iterations>
+      <sim_time>28 602000000</sim_time>
+      <real_time>28 634514362</real_time>
+      <wall_time>1735424647 753785007</wall_time>
+      <iterations>28602</iterations>
       <model name='ground_plane'>
         <pose>0 0 0 0 -0 0</pose>
         <scale>1 1 1</scale>
@@ -105,81 +105,16 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='unit_box'>
-        <pose>2.0005 2 0.112815 5e-06 -3e-06 0</pose>
-        <scale>2.0 1.0 0.22563</scale>
-        <link name='link'>
-          <pose>2.0005 2 0.112815 5e-06 -3e-06 0</pose>
-          <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>-0.355082 0.211574 -3.77906 1.26556 0.005754 -3.14158</acceleration>
-          <wrench>-0.355082 0.211574 -3.77906 0 -0 0</wrench>
-        </link>
-      </model>
       <light name='sun'>
         <pose>0 0 10 0 -0 0</pose>
       </light>
     </state>
-    <plugin name='gazebo_ros_state' filename='libgazebo_ros_state.so'>
-      <ros>
-        <namespace>/gazebo</namespace>
-      </ros>
-      <update_rate>1.0</update_rate>
-    </plugin>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose>5.21329 -4.985 4.67899 0 0.535644 2.04819</pose>
+        <pose>5 -5 2 0 0.275643 2.35619</pose>
         <view_controller>orbit</view_controller>
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
-    <model name='unit_box'>
-      <pose>2 2 0.5 0 -0 0</pose>
-      <static>0</static>
-      <link name='link'>
-        <inertial>
-          <!-- <mass>5</mass> -->
-          <mass>0.5</mass>
-          <inertia>
-            <ixx>0.166667</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.10416</iyy>
-            <iyz>0</iyz>
-            <izz>0.2083</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <collision name='collision'>
-          <geometry>
-            <box>
-              <size>1 1 1</size>
-            </box>
-          </geometry>
-          <max_contacts>10</max_contacts>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-        </collision>
-        <visual name='visual'>
-          <geometry>
-            <box>
-              <size>1 1 1</size>
-            </box>
-          </geometry>
-        </visual>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-    </model>
   </world>
 </sdf>

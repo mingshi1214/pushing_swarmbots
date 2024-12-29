@@ -30,6 +30,7 @@ setup(
             'drive_to_goal_obs = cpmr_ch2.drive_to_goal_obs:main',
             'drive_to_goal_3 = cpmr_ch2.drive_to_goal_3:main',
             'swarm = cpmr_ch2.swarm:main',
+            'swarm_broadcast = cpmr_ch2.swarm_broadcast:main',
         ],
     },
 )
