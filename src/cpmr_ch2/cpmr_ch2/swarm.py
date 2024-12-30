@@ -194,6 +194,7 @@ class SwarmRobot(Node):
         # if distance from self to goal > dist of box to goal then we push
         # else we follow
         # sleep for a bit
+        self._cmd_vel_pub.publish(Twist())
         time.sleep(5.0)
 
         # set robot goal pose
