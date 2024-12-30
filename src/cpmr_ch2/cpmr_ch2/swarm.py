@@ -75,7 +75,7 @@ class SwarmRobot(Node):
 
     Rel_Pose_Pushing_Threshold = 0.07 #m
     Object_Trans_Goal_Threshold = 0.1 #m
-    Object_Rot_Goal_Threshold = 0.02 #rads
+    Object_Rot_Goal_Threshold = 0.2 #rads
 
 
     def __init__(self):
@@ -120,12 +120,6 @@ class SwarmRobot(Node):
 
         self._cnt = 0
 
-        # self._cli = self.create_client(GetEntityState, '/gazebo/get_entity_state')
-        # while not self._cli.wait_for_service(timeout_sec=1.0):
-        #     self.get_logger().info('service not available, waiting again...')
-        # self._req = GetEntityState.Request()
-        # self._client_futures = []
-
     def parameter_callback(self, params):
         self.get_logger().info(f'move_robot_to_goal parameter callback')
         for param in params:
@@ -168,25 +162,6 @@ class SwarmRobot(Node):
         self._pose.y = pose.position.y
         o = pose.orientation
         roll, pitch, self._pose.t = euler_from_quaternion(o)
-
-        # # weird ros2 service client
-        # self._req.name = 'unit_box'
-        # self._client_futures.append(self._cli.call_async(self._req))
-        # incomplete_futures = []
-        # resp = None
-        # for f in self._client_futures:
-        #     if f.done():
-        #         resp = f.result()
-        #     else:
-        #         incomplete_futures.append(f)
-        # self._client_futures = incomplete_futures
-
-        # if resp != None:
-        #     box_pose = resp.state.pose
-        #     self._box.x = box_pose.position.x
-        #     self._box.y = box_pose.position.y
-        #     o = box_pose.orientation
-        #     roll, pitch, self._box.t = euler_from_quaternion(o)
 
         # self.get_logger().info(f'going to state machine')
         way = Int32()
@@ -300,7 +275,8 @@ class SwarmRobot(Node):
             # get next waypoint before saying the waypoint is done so we wait for everyone else to be ready for the next one.
             # this lessens length of our waypoint list so that everyone else has to be done their current waypoint before 
             # all_at_waypoint is true
-            self._get_next_waypoint(self) 
+            self.get_logger().info("rotation complete, switching to waiting for everyone else")
+            self._get_next_waypoint() 
             self._cur_state = FSM_STATES.WAYPOINT_DONE
             return
 
@@ -343,9 +319,13 @@ class SwarmRobot(Node):
         # make sure motion is stopped 
         # wait for others to get to their curr waypoint
         # start up once their waypoint length is same as yours
+        self.get_logger().info(f"waiting for all same to be true: {self._all_at_waypoint}")
         if self._all_at_waypoint: 
             # start up the process again
-            self._cur_state == FSM_STATES.START_TRANS
+            # reset the box init position 
+            # TODO: bad for resetting box init I think but might take a while to change it
+            self._box_init = pose(self._box.x, self._box.y, self._box.t)
+            self._cur_state = FSM_STATES.START_TRANS
         else:
             # wait for everyone else
             self._cmd_vel_pub.publish(Twist())
