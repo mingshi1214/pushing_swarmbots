@@ -292,6 +292,7 @@ class SwarmRobot(Node):
         if ((abs(curr_pose_rel_box.x - rotated_rel_pose.x) > SwarmRobot.Rel_Pose_Pushing_Threshold) or 
             (abs(curr_pose_rel_box.y - rotated_rel_pose.y) > SwarmRobot.Rel_Pose_Pushing_Threshold)):
             #get the correct pose on the box
+            # TODO: check if this gets triggered on the 2nd waypoint. it seems like no?
             maintained_pose = rotated_rel_pose
             maintained_pose.x = self._box.x - maintained_pose.x
             maintained_pose.y = self._box.y - maintained_pose.y
