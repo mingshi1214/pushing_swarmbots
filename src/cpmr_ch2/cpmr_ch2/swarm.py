@@ -67,7 +67,6 @@ def assign_waypoints(x, y, t):
     waypoints = []
     for i in range(len(x)):
         waypoints.append(pose(x[i], y[i], t[i]))
-    
     return waypoints
 
 
