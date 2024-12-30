@@ -9,6 +9,7 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import String, Int32, Bool
 from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import ModelStates
+from gazebo_msgs.msg import ModelStates
 from enum import Enum
 import time
 
@@ -155,7 +156,6 @@ class SwarmRobot(Node):
         # this is essentially the main loop
         # assigns odom and box pose and goes to state machine
         pose = msg.pose.pose
-        # self.get_logger().info(f'in listener')
 
         self._pose.x = pose.position.x
         self._pose.y = pose.position.y
@@ -362,10 +362,20 @@ class SwarmRobot(Node):
                             [np.sin(self._pose.t), np.cos(self._pose.t)]])
             
             g1 = r_01.T @ g0
+            
+            g0 = np.array([x, y])
+            # need to set in current robot frame (above is in robot init frame which is aligned with world frame in terms of rotation)
+            # robot rotates when getting dragged along block. do it in rotated robot frame
+            r_01 = np.array([[np.cos(self._pose.t), -np.sin(self._pose.t)],
+                            [np.sin(self._pose.t), np.cos(self._pose.t)]])
+            
+            g1 = r_01.T @ g0
 
             curr_mag = np.sqrt((x)**2 + (y)**2)
             # self.get_logger().info(f"vel mag {mag}, x {x}, y {y}, curr mag {curr_mag}")
 
+            twist.linear.x = g1[0] 
+            twist.linear.y = g1[1]
             twist.linear.x = g1[0] 
             twist.linear.y = g1[1]
             
@@ -397,7 +407,7 @@ class SwarmRobot(Node):
             self._cur_state = FSM_STATES.TASK_DONE
     
 def main(args=None):
-    
+
     rclpy.init(args=args)
     node = SwarmRobot()
     try:
