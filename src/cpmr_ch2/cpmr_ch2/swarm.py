@@ -74,7 +74,7 @@ def assign_waypoints(x, y, t):
 class SwarmRobot(Node):
 
     Rel_Pose_Pushing_Threshold = 0.07 #m
-    Rob_Pose_Rot_Pose_Threshold = 0.07 #m
+    Rob_Pose_Rot_Pose_Threshold = 0.06 #m
     Object_Trans_Goal_Threshold = 0.1 #m
     Object_Rot_Goal_Threshold = 0.2 #rads
 
@@ -350,7 +350,7 @@ class SwarmRobot(Node):
         # make sure motion is stopped
         self._cmd_vel_pub.publish(Twist())
         # task is done. shut down
-        # self.get_logger().info(f'{self.get_name()} task complete')
+        self.get_logger().info(f'{self.get_name()} task complete')
 
         return
 
@@ -388,8 +388,6 @@ class SwarmRobot(Node):
             curr_mag = np.sqrt((x)**2 + (y)**2)
             # self.get_logger().info(f"vel mag {mag}, x {x}, y {y}, curr mag {curr_mag}")
 
-            twist.linear.x = g1[0] 
-            twist.linear.y = g1[1]
             twist.linear.x = g1[0] 
             twist.linear.y = g1[1]
             
