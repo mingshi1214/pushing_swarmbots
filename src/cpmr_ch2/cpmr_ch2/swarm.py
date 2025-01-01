@@ -74,6 +74,7 @@ def assign_waypoints(x, y, t):
 class SwarmRobot(Node):
 
     Rel_Pose_Pushing_Threshold = 0.07 #m
+    Rob_Pose_Rot_Pose_Threshold = 0.07 #m
     Object_Trans_Goal_Threshold = 0.1 #m
     Object_Rot_Goal_Threshold = 0.2 #rads
 
@@ -120,6 +121,8 @@ class SwarmRobot(Node):
 
         self._cnt = 0
 
+        self._cmd_vel_pub.publish(Twist())
+
     def parameter_callback(self, params):
         self.get_logger().info(f'move_robot_to_goal parameter callback')
         for param in params:
@@ -150,6 +153,8 @@ class SwarmRobot(Node):
         self._box.y = box_pose.position.y
         o = box_pose.orientation
         roll, pitch, self._box.t = euler_from_quaternion(o)
+
+        # self.get_logger().info(f'box: {round(self._box.x,3)} {round(self._box.y, 3)} {round(self._box.t,3)}')
 
     def _listener_callback(self, msg):
         # listen to odom 
@@ -197,6 +202,10 @@ class SwarmRobot(Node):
         self._cmd_vel_pub.publish(Twist())
         time.sleep(5.0)
 
+        # set initial distance from box and maintain it
+        self._pose_rel_box.x = self._box.x - self._pose.x
+        self._pose_rel_box.y = self._box.y - self._pose.y
+
         # set robot goal pose
         self._robot_goal.x = self._pose.x + self._goal.x
         self._robot_goal.y = self._pose.y + self._goal.y
@@ -204,11 +213,8 @@ class SwarmRobot(Node):
         d_self2goal = distance(self._pose.x, self._pose.y,  self._robot_goal.x, self._robot_goal.y)
         d_box2goal = distance(self._box.x, self._box.y, self._robot_goal.x, self._robot_goal.y)
 
-        # set initial distance from box and maintain it
-        self._pose_rel_box.x = self._box.x - self._pose.x
-        self._pose_rel_box.y = self._box.y - self._pose.y
-
-        #TODO maybe worth it to have it be able to transition between pushing and following? (well if they do it right the first time, not necessary)
+        #TODO maybe worth it to have it be able to transition between pushing and following? 
+        # (well if they do it right the first time, not necessary)
         if d_self2goal>d_box2goal:
             self.get_logger().info(f"I am pushing. me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self._cur_state = FSM_STATES.PUSHING_TRANS
@@ -271,12 +277,18 @@ class SwarmRobot(Node):
         self._cur_state = FSM_STATES.PUSHING_ROT
 
     def _do_state_pushing_rot(self):
-        if(abs(self._box.t - (self._box_init.t + self._goal.t)) <= SwarmRobot.Object_Rot_Goal_Threshold):
+        # moved here. We want to check if our goal location has been hit for rotation instead of the box.
+        # sometimes box is rotated but we are not there and it messes up the next waypoint start position
+        temp = self._rotate_point_about_origin(self._pose_rel_box, self._goal.t)
+        temp.x = self._box.x - temp.x
+        temp.y = self._box.y - temp.y
+        
+        if ((abs(self._pose.x - temp.x) <= SwarmRobot.Rob_Pose_Rot_Pose_Threshold) and 
+            (abs(self._pose.y - temp.y) <= SwarmRobot.Rob_Pose_Rot_Pose_Threshold)):
             # get next waypoint before saying the waypoint is done so we wait for everyone else to be ready for the next one.
             # this lessens length of our waypoint list so that everyone else has to be done their current waypoint before 
             # all_at_waypoint is true
-            self.get_logger().info("rotation complete, switching to waiting for everyone else")
-            self._get_next_waypoint() 
+            self.get_logger().info(f"rotation complete, switching to waiting for everyone else: {self._all_at_waypoint}")
             self._cur_state = FSM_STATES.WAYPOINT_DONE
             return
 
@@ -304,10 +316,6 @@ class SwarmRobot(Node):
         else:
             # push the box
             # TODO: check if this breaks for big rotations (I think assuming going in a line rn? maybe time to do waypoints?)
-            temp = self._rotate_point_about_origin(self._pose_rel_box, self._goal.t)
-
-            temp.x = self._box.x - temp.x
-            temp.y = self._box.y - temp.y
 
             self._is_adjust = False
 
@@ -320,13 +328,19 @@ class SwarmRobot(Node):
         # make sure motion is stopped 
         # wait for others to get to their curr waypoint
         # start up once their waypoint length is same as yours
-        self.get_logger().info(f"waiting for all same to be true: {self._all_at_waypoint}")
+        # self.get_logger().info(f"waiting for all same to be true: {self._all_at_waypoint}")
         if self._all_at_waypoint: 
             # start up the process again
             # reset the box init position 
             # TODO: bad for resetting box init I think but might take a while to change it
             self._box_init = pose(self._box.x, self._box.y, self._box.t)
-            self._cur_state = FSM_STATES.START_TRANS
+            if len(self._waypoints) == 0:
+                self._cur_state = FSM_STATES.TASK_DONE
+            else:
+                # wait for everyone to get the message
+                time.sleep(1)
+                self._get_next_waypoint() 
+                self._cur_state = FSM_STATES.START_TRANS
         else:
             # wait for everyone else
             self._cmd_vel_pub.publish(Twist())
@@ -401,6 +415,7 @@ class SwarmRobot(Node):
     
     def _get_next_waypoint(self):
         # pop first index of waypoints only if there are more waypoints to go to
+        self.get_logger().info(f"getting next waypoint: {self._waypoints}")
         if len(self._waypoints) != 0:
             self._goal = self._waypoints.pop(0)
         else:
