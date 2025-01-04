@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool, Int32
+from std_msgs.msg import Int32
 import time 
 
 class SwarmBroadcast(Node):
@@ -12,20 +12,25 @@ class SwarmBroadcast(Node):
         self._waypoint_lens = [1, 2, 3, 4, 5]
         self._all_same = False
 
-        self._sub0 = self.create_subscription(Int32, "block_robot_0/waypoints", self._callback0, 1)
-        self._sub1 = self.create_subscription(Int32, "block_robot_1/waypoints", self._callback1, 1)
-        self._sub2 = self.create_subscription(Int32, "block_robot_2/waypoints", self._callback2, 1)
-        self._sub3 = self.create_subscription(Int32, "block_robot_3/waypoints", self._callback3, 1)
-        self._sub4 = self.create_subscription(Int32, "block_robot_4/waypoints", self._callback4, 1)
-        self._sub5 = self.create_subscription(Int32, "block_robot_5/waypoints", self._callback5, 1)
+        self._sub0 = self.create_subscription(Int32, "block_robot_0/complete_waypoint", self._callback0, 1)
+        self._sub1 = self.create_subscription(Int32, "block_robot_1/complete_waypoint", self._callback1, 1)
+        self._sub2 = self.create_subscription(Int32, "block_robot_2/complete_waypoint", self._callback2, 1)
+        self._sub3 = self.create_subscription(Int32, "block_robot_3/complete_waypoint", self._callback3, 1)
+        self._sub4 = self.create_subscription(Int32, "block_robot_4/complete_waypoint", self._callback4, 1)
+        self._sub5 = self.create_subscription(Int32, "block_robot_5/complete_waypoint", self._callback5, 1)
         
-        self._publisher = self.create_publisher(Bool, "/all_same", 1)
+        self._publisher = self.create_publisher(Int32, "/last_complete_waypoint", 1)
 
 
     def _callback0(self, msg):
         self._waypoint_lens[0] = msg.data
-        same = Bool()
-        same.data = all(i == self._waypoint_lens[0] for i in self._waypoint_lens)
+        same = Int32()
+        last_way = 9999999
+        for way in self._waypoint_lens:
+            last_way = min(last_way, way)
+
+        same.data = last_way
+        # same.data = all(i == self._waypoint_lens[0] for i in self._waypoint_lens)
         self._publisher.publish(same)
         # self.get_logger().info(f'allsame: {same.data}. waypoints: {self._waypoint_lens}')
 

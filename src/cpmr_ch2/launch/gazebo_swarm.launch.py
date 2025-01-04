@@ -47,6 +47,7 @@ def generate_launch_description():
         nodelist.append(DeclareLaunchArgument(f'goal_x_{robot_name}', default_value = '[1.0, -1.0, 1.0]', description = 'goal (x)'))
         # nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = str(poselist[i][1]+3.0), description = 'goal (y)'))
         nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = '[1.0, -1.0, 1.0]', description = 'goal (y)'))
+        # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.0, 0.0, 0.0]', description = 'goal (t)'))
         nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
         # breaks on this:
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
@@ -63,7 +64,7 @@ def generate_launch_description():
                 remappings=[('/odom', '/'+robot_name+"/odom"),
                             ('/cmd_vel', "/"+robot_name+"/cmd_vel"),
                             ('/diagnosis', "/"+robot_name+"/diagnosis"),
-                            ('/waypoints', "/"+robot_name+"/waypoints")],
+                            ('/complete_waypoint', "/"+robot_name+"/complete_waypoint")],
                 parameters = [
                 {'goal_x' : LaunchConfiguration(f'goal_x_{robot_name}')},
                 {'goal_y' : LaunchConfiguration(f'goal_y_{robot_name}')},

@@ -99,7 +99,7 @@ class SwarmRobot(Node):
 
         self._is_adjust = False
 
-        self._all_at_waypoint = False
+        self._teams_completed_waypoint = -1
 
         self._x_list, self._y_list, self._t_list = None, None, None
         self.add_on_set_parameters_callback(self.parameter_callback)
@@ -109,15 +109,16 @@ class SwarmRobot(Node):
         self.declare_parameter('max_vel', value=self._max_vel)
         self.declare_parameter('vel_gain', value=self._vel_gain)
         self._waypoints = assign_waypoints(self._x_list, self._y_list, self._t_list)
+        self._waypoints_index = -1
         self._get_next_waypoint()
 
         self._odom_sub = self.create_subscription(Odometry, "/odom", self._listener_callback, 5)
         self._obj_sub = self.create_subscription(ModelStates, "/gazebo/model_states", self._box_callback, 1)
-        self._swarm_waypoints_sub = self.create_subscription(Bool, "/all_same", self._waypoints_callback, 1) # listening to see if everyone is at their positions for the current waypoint
+        self._swarm_waypoints_sub = self.create_subscription(Int32, "/last_complete_waypoint", self._waypoints_callback, 1) # listening to see if everyone is at their positions for the current waypoint
         
         self._cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 5)
         self._diagnosis_pub = self.create_publisher(String, "/diagnosis", 5)
-        self._waypoints_pub = self.create_publisher(Int32, "/waypoints", 5)
+        self._waypoints_pub = self.create_publisher(Int32, "/complete_waypoint", 5)
 
         self._cnt = 0
 
@@ -143,7 +144,7 @@ class SwarmRobot(Node):
         return SetParametersResult(successful=True)
     
     def _waypoints_callback(self, msg):
-        self._all_at_waypoint = msg.data
+        self._teams_completed_waypoint = msg.data
 
     def _box_callback(self, msg):
         objs = msg.name
@@ -168,8 +169,12 @@ class SwarmRobot(Node):
         roll, pitch, self._pose.t = euler_from_quaternion(o)
 
         # self.get_logger().info(f'going to state machine')
+        #get index of last completed waypoint from current index
         way = Int32()
-        way.data = len(self._waypoints)
+        if self._cur_state == FSM_STATES.WAYPOINT_DONE or self._cur_state == FSM_STATES.TASK_DONE:
+            way.data = self._waypoints_index
+        else:
+            way.data = self._waypoints_index - 1 
         self._waypoints_pub.publish(way)
         self._diagnosis()
         self._state_machine()
@@ -288,7 +293,7 @@ class SwarmRobot(Node):
             # get next waypoint before saying the waypoint is done so we wait for everyone else to be ready for the next one.
             # this lessens length of our waypoint list so that everyone else has to be done their current waypoint before 
             # all_at_waypoint is true
-            self.get_logger().info(f"rotation complete, switching to waiting for everyone else: {self._all_at_waypoint}")
+            self.get_logger().info(f"rotation complete, switching to waiting for everyone else: {self._teams_completed_waypoint}")
             self._cur_state = FSM_STATES.WAYPOINT_DONE
             return
 
@@ -328,19 +333,20 @@ class SwarmRobot(Node):
         # make sure motion is stopped 
         # wait for others to get to their curr waypoint
         # start up once their waypoint length is same as yours
-        # self.get_logger().info(f"waiting for all same to be true: {self._all_at_waypoint}")
-        if self._all_at_waypoint: 
+        # self.get_logger().info(f"waiting for all same to be true: {self._teams_completed_waypoint}")
+        if self._teams_completed_waypoint == self._waypoints_index: 
             # start up the process again
             # reset the box init position 
             # TODO: bad for resetting box init I think but might take a while to change it
             self._box_init = pose(self._box.x, self._box.y, self._box.t)
-            if len(self._waypoints) == 0:
+            if self._waypoints_index >= len(self._waypoints):
                 self._cur_state = FSM_STATES.TASK_DONE
             else:
                 # wait for everyone to get the message
                 time.sleep(1)
-                self._get_next_waypoint() 
-                self._cur_state = FSM_STATES.START_TRANS
+                self._get_next_waypoint()
+                if (self._cur_state != FSM_STATES.TASK_DONE): # get_next_waypoint() can change the state too
+                    self._cur_state = FSM_STATES.START_TRANS
         else:
             # wait for everyone else
             self._cmd_vel_pub.publish(Twist())
@@ -413,9 +419,10 @@ class SwarmRobot(Node):
     
     def _get_next_waypoint(self):
         # pop first index of waypoints only if there are more waypoints to go to
-        self.get_logger().info(f"getting next waypoint: {self._waypoints}")
-        if len(self._waypoints) != 0:
-            self._goal = self._waypoints.pop(0)
+        if self._waypoints_index < len(self._waypoints) - 1:
+            self._waypoints_index += 1
+            self._goal = self._waypoints[self._waypoints_index]
+            self.get_logger().info(f"getting next waypoint: {self._waypoints}, index: {self._waypoints_index}")
         else:
             self._cur_state = FSM_STATES.TASK_DONE
     
