@@ -24,11 +24,63 @@ class FSM_STATES(Enum):
     TASK_DONE = 'Task Done'
 
 
-class pose():
+class Pose:
     def __init__(self, x0=0.0, y0=0.0, t0=0.0):
         self.x = x0
         self.y = y0
         self.t = t0
+
+
+class Object:
+    def __init__(self, x_coords, y_coords):
+        self.points = [[coords[0], coords[1]] for coords in zip(x_coords, y_coords)]
+
+    # returns < 0 if clockwise, > 0 if counter clockwise, and 0 if colinear
+    def _is_counter_clockwise(self, a, b, c):
+        val = ((c[1] - a[1]) * (b[0] - a[0])) - ((b[1] - a[1]) * (c[0] - a[0]))
+
+        # reduce output into 3 possible values
+        if val < 0:
+            return -1
+        elif val > 0:
+            return 1
+        else:
+            return 0
+    
+    # only works if points are already proven
+    def _is_point_in_colinear_segment(self, s1, s2, p):
+        return ((p[0] >= min(s1[0], s2[0])) and (p[0] <= max(s1[0], s2[0])) and (p[1] >= min(s1[1], s2[1])) and (p[1] <= max(s1[1], s2[1])))
+
+    # based on: https://www.geeksforgeeks.org/check-if-two-given-line-segments-intersect/
+    def does_line_intersect_object(self, p1, p2):
+        c1_points = self.points
+        c2_points = self.points.copy()
+        c2_points.append(c2_points.pop(0)) # cycle corners by 1 element
+
+        for i in range(len(c1_points)):
+            c1 = c1_points[i]
+            c2 = c2_points[i]
+
+            val1 = self._is_counter_clockwise(p1, p2, c1)
+            val2 = self._is_counter_clockwise(p1, p2, c2)
+            val3 = self._is_counter_clockwise(c1, c2, p1)
+            val4 = self._is_counter_clockwise(c1, c2, p2)
+
+            # general case
+            if ((val1 != val2) and (val3 != val4)):
+                return True
+            
+            # special case where they're colinear
+            if (((val1 == 0) and self._is_point_in_colinear_segment(p1, p2, c1)) or 
+                ((val2 == 0) and self._is_point_in_colinear_segment(p1, p2, c2)) or
+                ((val3 == 0) and self._is_point_in_colinear_segment(c1, c2, p1)) or
+                ((val4 == 0) and self._is_point_in_colinear_segment(c1, c2, p2))):
+                return True
+            
+        return False
+
+            
+
 
 def euler_from_quaternion(quaternion):
     """
@@ -67,7 +119,7 @@ def assign_waypoints(x, y, t):
     # make waypoints a list of pose objects [pose0, pose1, ...]
     waypoints = []
     for i in range(len(x)):
-        waypoints.append(pose(x[i], y[i], t[i]))
+        waypoints.append(Pose(x[i], y[i], t[i]))
     return waypoints
 
 
@@ -83,34 +135,39 @@ class SwarmRobot(Node):
         super().__init__('move_robot_to_goal')
         self.get_logger().info(f'{self.get_name()} created')
 
-        self._goal = pose()
-        self._driving_goal = pose() # only used for diagnosis for now
-        self._robot_goal = pose()
+        self._goal = Pose()
+        self._driving_goal = Pose() # only used for diagnosis for now
+        self._robot_goal = Pose()
         self._vel_gain = 50.0
         self._max_vel = 0.4
 
-        self._pose = pose()
-        self._pose_rel_box = pose()
+        self._pose = Pose()
+        self._pose_rel_box = Pose()
         self._cur_state = FSM_STATES.START_TRANS
         self._start_time = self.get_clock().now().nanoseconds * 1e-9
 
-        self._box = pose(2.0, 2.0, 0.0)
-        self._box_init = pose(self._box.x, self._box.y, self._box.t)
+        self._box = Pose(2.0, 2.0, 0.0)
+        self._box_init = Pose(self._box.x, self._box.y, self._box.t)
 
         self._is_adjust = False
 
         self._teams_completed_waypoint = -1
 
-        self._x_list, self._y_list, self._t_list = None, None, None
+        self._x_list, self._y_list, self._t_list, self._x_object, self._y_object = None, None, None, None, None
         self.add_on_set_parameters_callback(self.parameter_callback)
         self.declare_parameter('goal_x', value=self._x_list)
         self.declare_parameter('goal_y', value=self._y_list)
         self.declare_parameter('goal_t', value=self._t_list)
         self.declare_parameter('max_vel', value=self._max_vel)
         self.declare_parameter('vel_gain', value=self._vel_gain)
+        self.declare_parameter('object_x', value=self._x_object)
+        self.declare_parameter('object_y', value=self._y_object)
+
         self._waypoints = assign_waypoints(self._x_list, self._y_list, self._t_list)
         self._waypoints_index = -1
         self._get_next_waypoint()
+
+        self._object = Object(self._x_object, self._y_object)
 
         self._odom_sub = self.create_subscription(Odometry, "/odom", self._listener_callback, 5)
         self._obj_sub = self.create_subscription(ModelStates, "/gazebo/model_states", self._box_callback, 1)
@@ -137,6 +194,10 @@ class SwarmRobot(Node):
                 self._max_vel = param.value
             elif param.name == 'vel_gain' and param.type_ == Parameter.Type.DOUBLE:
                 self._vel_gain = param.value
+            elif param.name == 'object_x' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
+                self._x_object = param.value
+            elif param.name == 'object_y' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
+                self._y_object = param.value
             else:
                 self.get_logger().warn(f'Invalid parameter {param.name}')
                 return SetParametersResult(successful=False)
@@ -215,16 +276,17 @@ class SwarmRobot(Node):
         self._robot_goal.x = self._pose.x + self._goal.x
         self._robot_goal.y = self._pose.y + self._goal.y
 
-        d_self2goal = distance(self._pose.x, self._pose.y,  self._robot_goal.x, self._robot_goal.y)
-        d_box2goal = distance(self._box.x, self._box.y, self._robot_goal.x, self._robot_goal.y)
+        # d_self2goal = distance(self._pose.x, self._pose.y,  self._robot_goal.x, self._robot_goal.y)
+        # d_box2goal = distance(self._box.x, self._box.y, self._robot_goal.x, self._robot_goal.y)
 
         #TODO maybe worth it to have it be able to transition between pushing and following? 
         # (well if they do it right the first time, not necessary)
-        if d_self2goal>d_box2goal:
-            self.get_logger().info(f"I am pushing. me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+        # if d_self2goal>d_box2goal:
+        if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y]):
+            self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self._cur_state = FSM_STATES.PUSHING_TRANS
         else:
-            self.get_logger().info(f"I am following. me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+            self.get_logger().info(f"I am following.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self._cur_state = FSM_STATES.FOLLOWING_TRANS
             time.sleep(1.0) # wait so that the pushing can happen first
         return
@@ -236,14 +298,14 @@ class SwarmRobot(Node):
             return
         
         # check if we're too far from our initial relative position
-        curr_pose_rel_box = pose()
+        curr_pose_rel_box = Pose()
         curr_pose_rel_box.x = self._box.x - self._pose.x
         curr_pose_rel_box.y = self._box.y - self._pose.y
 
         if ((abs(curr_pose_rel_box.x - self._pose_rel_box.x) > SwarmRobot.Rel_Pose_Pushing_Threshold) or 
             (abs(curr_pose_rel_box.y - self._pose_rel_box.y) > SwarmRobot.Rel_Pose_Pushing_Threshold)):
             #get the correct pose on the box
-            maintained_pose = pose()
+            maintained_pose = Pose()
             maintained_pose.x = self._box.x - self._pose_rel_box.x
             maintained_pose.y = self._box.y - self._pose_rel_box.y
             self._is_adjust = True
@@ -265,7 +327,7 @@ class SwarmRobot(Node):
         
         # follow the box
         # set new goals depending on where the box is
-        temp_goal = pose()
+        temp_goal = Pose()
         # self.get_logger().info(f"I am following. initial goal:{self._goal.x} {self._goal.y}")
         temp_goal.x = self._box.x - self._pose_rel_box.x
         temp_goal.y = self._box.y - self._pose_rel_box.y
@@ -298,7 +360,7 @@ class SwarmRobot(Node):
             return
 
         # check if we're too far from our initial relative position
-        curr_pose_rel_box = pose()
+        curr_pose_rel_box = Pose()
         curr_pose_rel_box.x = self._box.x - self._pose.x
         curr_pose_rel_box.y = self._box.y - self._pose.y
 
@@ -338,7 +400,7 @@ class SwarmRobot(Node):
             # start up the process again
             # reset the box init position 
             # TODO: bad for resetting box init I think but might take a while to change it
-            self._box_init = pose(self._box.x, self._box.y, self._box.t)
+            self._box_init = Pose(self._box.x, self._box.y, self._box.t)
             if self._waypoints_index >= len(self._waypoints):
                 self._cur_state = FSM_STATES.TASK_DONE
             else:
@@ -404,7 +466,7 @@ class SwarmRobot(Node):
         return
     
     def _rotate_point_about_origin(self, point, radians):
-        adjusted = pose()
+        adjusted = Pose()
         adjusted.x = (point.x * math.cos(radians)) - (point.y * math.sin(radians))
         adjusted.y = (point.x * math.sin(radians)) + (point.y * math.cos(radians))
 

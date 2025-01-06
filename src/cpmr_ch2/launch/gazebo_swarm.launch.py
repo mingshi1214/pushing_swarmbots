@@ -48,12 +48,16 @@ def generate_launch_description():
         # nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = str(poselist[i][1]+3.0), description = 'goal (y)'))
         nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = '[1.0, -1.0, 1.0]', description = 'goal (y)'))
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.0, 0.0, 0.0]', description = 'goal (t)'))
-        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
+        # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[1.65, 1.65, 1.65]', description = 'goal (t)'))
         # breaks on this:
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[1.65, 1.65]', description = 'goal (t)'))
         nodelist.append(DeclareLaunchArgument(f'max_vel_{robot_name}', default_value = '0.5', description = 'max (v)'))
         nodelist.append(DeclareLaunchArgument(f'vel_gain_{robot_name}', default_value = '0.2', description = 'controller gain'))
+
+        nodelist.append(DeclareLaunchArgument('object_x', default_value='[1.0, 3.0, 3.0, 1.0]', description='object vertices (x)'))
+        nodelist.append(DeclareLaunchArgument('object_y', default_value='[1.5, 1.5, 2.5, 2.5]', description='object vertices (y)'))
         nodelist.append(
             Node(
                 namespace=robot_name,
@@ -70,7 +74,9 @@ def generate_launch_description():
                 {'goal_y' : LaunchConfiguration(f'goal_y_{robot_name}')},
                 {'goal_t' : LaunchConfiguration(f'goal_t_{robot_name}')},
                 {'max_vel' : LaunchConfiguration(f'max_vel_{robot_name}')},
-                {'vel_gain' : LaunchConfiguration(f'vel_gain_{robot_name}')}
+                {'vel_gain' : LaunchConfiguration(f'vel_gain_{robot_name}')},
+                {'object_x' : LaunchConfiguration('object_x')},
+                {'object_y' : LaunchConfiguration('object_y')}
             ]
             )
         )
