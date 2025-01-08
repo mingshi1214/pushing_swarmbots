@@ -49,7 +49,9 @@ def generate_launch_description():
         nodelist.append(DeclareLaunchArgument(f'goal_y_{robot_name}', default_value = '[1.0, -1.0, 1.0]', description = 'goal (y)'))
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.0, 0.0, 0.0]', description = 'goal (t)'))
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
-        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[1.65, 1.65, 1.65]', description = 'goal (t)'))
+        # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[1.65, 1.65, 1.65]', description = 'goal (t)'))
+        nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[2.43, 0.78, 1.65]', description = 'goal (t)'))
+        # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[3.14, 3.14, 3.14]', description = 'goal (t)'))
         # breaks on this:
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[0.78, 0.78, 0.78]', description = 'goal (t)'))
         # nodelist.append(DeclareLaunchArgument(f'goal_t_{robot_name}', default_value = '[1.65, 1.65]', description = 'goal (t)'))

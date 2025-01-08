@@ -341,6 +341,8 @@ class SwarmRobot(Node):
 
         self.get_logger().info("translation complete, switching to rotation")
 
+        self._box_init_t = self._box.t
+
         self._cur_state = FSM_STATES.PUSHING_ROT
 
     def _do_state_pushing_rot(self):
@@ -364,9 +366,9 @@ class SwarmRobot(Node):
         curr_pose_rel_box.x = self._box.x - self._pose.x
         curr_pose_rel_box.y = self._box.y - self._pose.y
 
-        # rotate our initial position based on the box's rotation
+        # rotate our initial position based on the box's rotation since we started rotating
         # initial pose ref frame
-        rotated_rel_pose = self._rotate_point_about_origin(self._pose_rel_box, self._box.t)
+        rotated_rel_pose = self._rotate_point_about_origin(self._pose_rel_box, self._box.t- self._box_init_t)
 
         if ((abs(curr_pose_rel_box.x - rotated_rel_pose.x) > SwarmRobot.Rel_Pose_Pushing_Threshold) or 
             (abs(curr_pose_rel_box.y - rotated_rel_pose.y) > SwarmRobot.Rel_Pose_Pushing_Threshold)):
@@ -386,7 +388,12 @@ class SwarmRobot(Node):
 
             self._is_adjust = False
 
-            self._drive_to_goal(temp)
+            # Try only rotating in little increments so that we follow an arc around to the correct point instead of driving straight there
+            temp = self._rotate_point_about_origin(curr_pose_rel_box, 0.175) # 10 degs
+            temp.x = self._box.x - temp.x
+            temp.y = self._box.y - temp.y
+
+            self._drive_to_goal(temp, 0)
 
     def _do_state_following_rot(self):
         pass
