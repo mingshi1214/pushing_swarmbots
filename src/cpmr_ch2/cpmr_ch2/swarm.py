@@ -33,11 +33,12 @@ class Pose:
 
 class Object:
     def __init__(self, x_coords, y_coords):
-        self.points = [[coords[0], coords[1]] for coords in zip(x_coords, y_coords)]
+        self.init_points = [Pose(coords[0], coords[1], 0.0) for coords in zip(x_coords, y_coords)]
+        self.points = self.init_points.copy()
 
     # returns < 0 if clockwise, > 0 if counter clockwise, and 0 if colinear
     def _is_counter_clockwise(self, a, b, c):
-        val = ((c[1] - a[1]) * (b[0] - a[0])) - ((b[1] - a[1]) * (c[0] - a[0]))
+        val = ((c.y - a.y) * (b.x - a.x)) - ((b.y - a.y) * (c.x - a.x))
 
         # reduce output into 3 possible values
         if val < 0:
@@ -49,10 +50,26 @@ class Object:
     
     # only works if points are already proven
     def _is_point_in_colinear_segment(self, s1, s2, p):
-        return ((p[0] >= min(s1[0], s2[0])) and (p[0] <= max(s1[0], s2[0])) and (p[1] >= min(s1[1], s2[1])) and (p[1] <= max(s1[1], s2[1])))
+        return ((p.x >= min(s1.x, s2.x)) and (p.x <= max(s1.x, s2.x)) and (p.y >= min(s1.y, s2.y)) and (p.y <= max(s1.y, s2.y)))
+
+    def _update_points(self, new_pose):
+        updated = []
+        for coord in self.points:
+            # rotate about origin then add the translation
+            pt = rotate_point_about_origin(coord, new_pose.t)
+
+            # now translate by new pose
+            pt.x = pt.x + new_pose.x
+            pt.y = pt.y + new_pose.y
+
+            updated.append(pt)
+
 
     # based on: https://www.geeksforgeeks.org/check-if-two-given-line-segments-intersect/
-    def does_line_intersect_object(self, p1, p2):
+    def does_line_intersect_object(self, p1, p2, new_pose):
+        p1 = Pose(p1[0], p1[1], 0.0)
+        p2 = Pose(p2[0], p2[1], 0.0)
+        self._update_points(new_pose)
         c1_points = self.points
         c2_points = self.points.copy()
         c2_points.append(c2_points.pop(0)) # cycle corners by 1 element
@@ -122,6 +139,12 @@ def assign_waypoints(x, y, t):
         waypoints.append(Pose(x[i], y[i], t[i]))
     return waypoints
 
+def rotate_point_about_origin(point, radians):
+        adjusted = Pose()
+        adjusted.x = (point.x * math.cos(radians)) - (point.y * math.sin(radians))
+        adjusted.y = (point.x * math.sin(radians)) + (point.y * math.cos(radians))
+
+        return adjusted
 
 class SwarmRobot(Node):
 
@@ -198,6 +221,8 @@ class SwarmRobot(Node):
                 self._x_object = param.value
             elif param.name == 'object_y' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
                 self._y_object = param.value
+            elif param.name == 'reallocate' and param.type_ == Parameter.Type.BOOL:
+                self._reallocate = param.value
             else:
                 self.get_logger().warn(f'Invalid parameter {param.name}')
                 return SetParametersResult(successful=False)
@@ -282,7 +307,7 @@ class SwarmRobot(Node):
         #TODO maybe worth it to have it be able to transition between pushing and following? 
         # (well if they do it right the first time, not necessary)
         # if d_self2goal>d_box2goal:
-        if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y]):
+        if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
             self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self._cur_state = FSM_STATES.PUSHING_TRANS
         else:
@@ -348,7 +373,7 @@ class SwarmRobot(Node):
     def _do_state_pushing_rot(self):
         # moved here. We want to check if our goal location has been hit for rotation instead of the box.
         # sometimes box is rotated but we are not there and it messes up the next waypoint start position
-        temp = self._rotate_point_about_origin(self._pose_rel_box, self._goal.t)
+        temp = rotate_point_about_origin(self._pose_rel_box, self._goal.t)
         temp.x = self._box.x - temp.x
         temp.y = self._box.y - temp.y
         
@@ -368,7 +393,7 @@ class SwarmRobot(Node):
 
         # rotate our initial position based on the box's rotation since we started rotating
         # initial pose ref frame
-        rotated_rel_pose = self._rotate_point_about_origin(self._pose_rel_box, self._box.t- self._box_init_t)
+        rotated_rel_pose = rotate_point_about_origin(self._pose_rel_box, self._box.t- self._box_init_t)
 
         if ((abs(curr_pose_rel_box.x - rotated_rel_pose.x) > SwarmRobot.Rel_Pose_Pushing_Threshold) or 
             (abs(curr_pose_rel_box.y - rotated_rel_pose.y) > SwarmRobot.Rel_Pose_Pushing_Threshold)):
@@ -389,7 +414,7 @@ class SwarmRobot(Node):
             self._is_adjust = False
 
             # Try only rotating in little increments so that we follow an arc around to the correct point instead of driving straight there
-            temp = self._rotate_point_about_origin(curr_pose_rel_box, 0.175) # 10 degs
+            temp = rotate_point_about_origin(curr_pose_rel_box, 0.175) # 10 degs
             temp.x = self._box.x - temp.x
             temp.y = self._box.y - temp.y
 
@@ -471,13 +496,6 @@ class SwarmRobot(Node):
         #     twist.angular.z = t_diff/abs(t_diff) * 0.2
         self._cmd_vel_pub.publish(twist)
         return
-    
-    def _rotate_point_about_origin(self, point, radians):
-        adjusted = Pose()
-        adjusted.x = (point.x * math.cos(radians)) - (point.y * math.sin(radians))
-        adjusted.y = (point.x * math.sin(radians)) + (point.y * math.cos(radians))
-
-        return adjusted
     
     def _diagnosis(self):
         diagnosis = String()

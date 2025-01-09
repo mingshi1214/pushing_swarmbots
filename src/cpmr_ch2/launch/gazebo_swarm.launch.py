@@ -58,8 +58,12 @@ def generate_launch_description():
         nodelist.append(DeclareLaunchArgument(f'max_vel_{robot_name}', default_value = '0.5', description = 'max (v)'))
         nodelist.append(DeclareLaunchArgument(f'vel_gain_{robot_name}', default_value = '0.2', description = 'controller gain'))
 
-        nodelist.append(DeclareLaunchArgument('object_x', default_value='[1.0, 3.0, 3.0, 1.0]', description='object vertices (x)'))
-        nodelist.append(DeclareLaunchArgument('object_y', default_value='[1.5, 1.5, 2.5, 2.5]', description='object vertices (y)'))
+        # changing object x, y to be rel to itself. 
+        # centered at origin (then we add the translation and rotation to the points)
+        nodelist.append(DeclareLaunchArgument('object_x', default_value='[-1.0, 1.0, 1.0, -1.0]', description='object vertices (x)'))
+        nodelist.append(DeclareLaunchArgument('object_y', default_value='[-0.5, -0.5, 0.5, 0.5]', description='object vertices (y)'))
+
+        nodelist.append(DeclareLaunchArgument(f'reallocate', default_value = 'True', description = 'redistributing or no'))
         nodelist.append(
             Node(
                 namespace=robot_name,
