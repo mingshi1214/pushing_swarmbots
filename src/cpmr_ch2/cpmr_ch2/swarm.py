@@ -54,7 +54,7 @@ class Object:
 
     def _update_points(self, new_pose):
         updated = []
-        for coord in self.points:
+        for coord in self.init_points:
             # rotate about origin then add the translation
             pt = rotate_point_about_origin(coord, new_pose.t)
 
@@ -63,6 +63,7 @@ class Object:
             pt.y = pt.y + new_pose.y
 
             updated.append(pt)
+        self.points = updated
 
 
     # based on: https://www.geeksforgeeks.org/check-if-two-given-line-segments-intersect/
@@ -149,7 +150,7 @@ def rotate_point_about_origin(point, radians):
 class SwarmRobot(Node):
 
     Rel_Pose_Pushing_Threshold = 0.07 #m
-    Rob_Pose_Rot_Pose_Threshold = 0.06 #m
+    Rob_Pose_Threshold = 0.06 #m
     Object_Trans_Goal_Threshold = 0.1 #m
     Object_Rot_Goal_Threshold = 0.2 #rads
 
@@ -317,8 +318,11 @@ class SwarmRobot(Node):
         return
     
     def _do_state_pushing_trans(self):
-        if ((abs(self._box.x - (self._box_init.x + self._goal.x)) <= SwarmRobot.Object_Trans_Goal_Threshold) and 
-            (abs(self._box.y - (self._box_init.y + self._goal.y)) <= SwarmRobot.Object_Trans_Goal_Threshold)):
+        if (((abs(self._box.x - (self._box_init.x + self._goal.x)) <= SwarmRobot.Object_Trans_Goal_Threshold) and 
+            (abs(self._box.y - (self._box_init.y + self._goal.y)) <= SwarmRobot.Object_Trans_Goal_Threshold))
+            or ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
+            (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold))):
+            # if the box is at goal OR the robot is at goal
             self._cur_state = FSM_STATES.START_ROT
             return
         
@@ -345,8 +349,10 @@ class SwarmRobot(Node):
         return
     
     def _do_state_following_trans(self):
-        if ((abs(self._box.x - (self._box_init.x + self._goal.x)) <= SwarmRobot.Object_Trans_Goal_Threshold) and 
-            (abs(self._box.y - (self._box_init.y + self._goal.y)) <= SwarmRobot.Object_Trans_Goal_Threshold)):
+        if (((abs(self._box.x - (self._box_init.x + self._goal.x)) <= SwarmRobot.Object_Trans_Goal_Threshold) and 
+            (abs(self._box.y - (self._box_init.y + self._goal.y)) <= SwarmRobot.Object_Trans_Goal_Threshold))
+            or ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
+            (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold))):
             self._cur_state = FSM_STATES.START_ROT
             return
         
@@ -377,8 +383,8 @@ class SwarmRobot(Node):
         temp.x = self._box.x - temp.x
         temp.y = self._box.y - temp.y
         
-        if ((abs(self._pose.x - temp.x) <= SwarmRobot.Rob_Pose_Rot_Pose_Threshold) and 
-            (abs(self._pose.y - temp.y) <= SwarmRobot.Rob_Pose_Rot_Pose_Threshold)):
+        if ((abs(self._pose.x - temp.x) <= SwarmRobot.Rob_Pose_Threshold) and 
+            (abs(self._pose.y - temp.y) <= SwarmRobot.Rob_Pose_Threshold)):
             # get next waypoint before saying the waypoint is done so we wait for everyone else to be ready for the next one.
             # this lessens length of our waypoint list so that everyone else has to be done their current waypoint before 
             # all_at_waypoint is true
