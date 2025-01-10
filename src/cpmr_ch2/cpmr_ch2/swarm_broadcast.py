@@ -31,7 +31,7 @@ class SwarmBroadcast(Node):
 
         # spots are where the robots are. numbers are the block robot numbers
         self._spots = [-1, 4, -1, -1, 5, -1, -1, 3, -1, -1, 1, -1, -1, 0, -1, -1, 2, -1]
-        self._push_spots = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1, -1, -1, -1]
+        self._push_spots = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
 
         self._srv = self.create_service(AddTwoInts, '/reallocate', self._reallocate_callback)
         self._pub_occupancylist = self.create_publisher(Int32MultiArray, "/taken_spots", 1)
@@ -41,15 +41,17 @@ class SwarmBroadcast(Node):
         # lol sum will just be -1 if false and 1 true
         # request a is slot they want
         # request b is which robot they are
-        if self._spots[request.a] == -1:
+        self.get_logger().info('Incoming request\na: %d b: %d' % (request.a, request.b))
+        if self._spots[request.a] != -1:
             # taken. return false
             response.sum = -1
-            self.get_logger().info('Incoming request\na: %d b: %d' % (request.a, request.b))
-            self.get_logger().info(f'Cannot. {self._spots}')
+            self.get_logger().info(f'Cannot. {self._spots} {request.a} {self._spots[request.a]}')
         else:
             # return true
+            self.get_logger().info(f'Can. {self._spots} {request.a} {self._spots[request.a]}')
             self._spots[self._spots.index(request.b)] = -1
             self._spots[request.a] = request.b
+            self.get_logger().info(f'Can after. {self._spots}')
             response.sum = 1
         return response
 

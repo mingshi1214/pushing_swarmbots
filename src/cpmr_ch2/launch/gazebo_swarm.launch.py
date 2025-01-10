@@ -76,7 +76,8 @@ def generate_launch_description():
                 remappings=[('/odom', '/'+robot_name+"/odom"),
                             ('/cmd_vel', "/"+robot_name+"/cmd_vel"),
                             ('/diagnosis', "/"+robot_name+"/diagnosis"),
-                            ('/complete_waypoint', "/"+robot_name+"/complete_waypoint")],
+                            ('/complete_waypoint', "/"+robot_name+"/complete_waypoint"),
+                            ('/pushing', "/"+robot_name+"/pushing")],
                 parameters = [
                 {'goal_x' : LaunchConfiguration(f'goal_x_{robot_name}')},
                 {'goal_y' : LaunchConfiguration(f'goal_y_{robot_name}')},

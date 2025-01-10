@@ -240,10 +240,12 @@ class SwarmRobot(Node):
         self._waypoints_pub = self.create_publisher(Int32, "/complete_waypoint", 5)
         self._push_pub = self.create_publisher(Bool, "/pushing", 5)
 
-        self._reallocate_cli = self.create_client(AddTwoInts, '/reallocate')
-        while not self._reallocate_cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('service not available, waiting again...')
+        # self._reallocate_cli = self.create_client(AddTwoInts, '/reallocate')
+        # while not self._reallocate_cli.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info('service not available, waiting again...')
         self._req = AddTwoInts.Request()
+        self._reallocate_client = MinimalClientAsync()
+        
 
         self._cnt = 0
 
@@ -283,10 +285,11 @@ class SwarmRobot(Node):
     def _spots_callback(self, msg):
         self._spots = msg.data
         if self._init_spot == -1 and self.number is not None:
+            self.get_logger().info(f'box init spot: {self.number}')
             self._init_spot = self._spots.index(self.number)
 
     def _pushing_spots_callback(self, msg):
-        self._pushing_spots = msg.data
+        self._pushing_spots = list(msg.data)
 
     def _box_callback(self, msg):
         objs = msg.name
@@ -303,7 +306,7 @@ class SwarmRobot(Node):
         # listen to odom 
         # this is essentially the main loop
         # assigns odom and box pose and goes to state machine
-        self.get_logger().info(f'number: {self.number}')
+        # self.get_logger().info(f'number: {self.number}')
         pose = msg.pose.pose
 
         self._pose.x = pose.position.x
@@ -417,25 +420,40 @@ class SwarmRobot(Node):
     def _do_state_reallocation_bf_trans(self):
         # do until you get assigned somewhere
         # ie. srv response is true
+        if self._pushing:
+            # do nothing if already pushing
+            # self.get_logger().info(f"already pushing")
+            return
 
         if self._finding_spot:
             # need to call srv until its true
             # find all the pushing robot indices
+            if len(self._pushing_spots) == 0:
+                return
             indices = [i for i, x in enumerate(self._pushing_spots) if x == 1]
+            self.get_logger().info(f"indicies {indices}")
+            self.get_logger().info(f"push spots {self._pushing_spots}")
+
+            if len(indices) == 0:
+                return
 
             # randomly choose a pushing robot and go either left or right of them lol
             #TODO this fails for sure if there is only pushing robots on the short end of the shape
             left_right = random.choice([-1, 1])
             selected_rob = random.choice(indices)
+            
             spot = selected_rob + left_right
             if spot < 0 or spot > 17:
                 # go other way if no spot avail
                 spot = selected_rob - left_right
 
-            response = self._send_request(int(spot), int(self.number))
+            # response = self._send_request(int(spot), int(self.number))
+            response = self._reallocate_client.send_request(int(spot), int(self.number))
+            self.get_logger().info(f"response: {response}")
             if response.sum == 1:
                 self._finding_spot = False
                 # reallocation is correct. now we go to spot
+                self.get_logger().info(f"relocation spot found")
                 # rotate spot by box angle
                 realloc_pose = SwarmRobot.Valid_Spots[spot]
                 realloc_pose = rotate_point_about_origin(realloc_pose, self._box.t)
@@ -447,6 +465,7 @@ class SwarmRobot(Node):
             # go to the spot we chose --> now it's robot_goal
             # need to figure out how to avoid box and not just go in straight line lol
             #TODO avoid box and other bots
+            self.get_logger().info(f"go to relocation spot")
 
             if ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
             (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
@@ -689,7 +708,23 @@ class SwarmRobot(Node):
             self.get_logger().info(f"getting next waypoint: {self._waypoints}, index: {self._waypoints_index}")
         else:
             self._cur_state = FSM_STATES.TASK_DONE
-    
+
+class MinimalClientAsync(Node):
+
+    def __init__(self):
+        super().__init__('minimal_client_async')
+        self.cli = self.create_client(AddTwoInts, '/reallocate')
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
+        self.req = AddTwoInts.Request()
+
+    def send_request(self, a, b):
+        self.req.a = a
+        self.req.b = b
+        self.future = self.cli.call_async(self.req)
+        rclpy.spin_until_future_complete(self, self.future)
+        return self.future.result()
+
 def main(args=None):
 
     rclpy.init(args=args)
