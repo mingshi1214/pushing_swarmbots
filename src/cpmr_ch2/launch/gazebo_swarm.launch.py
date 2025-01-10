@@ -14,7 +14,8 @@ def generate_launch_description():
 
     # Spawn 5 robots in Gazebo
     nodelist = []
-    poselist = [[1.5, 1.37], [2.5, 1.37], [0.87, 2], [3.13, 2], [1.5, 2.63], [2.5, 2.63]]#[[1.5, 1.35], [2.5, 1.35], [0.85, 2], [3.15, 2], [1.5, 2.65], [2.5, 2.65]]
+    s = 0.13 # radius is 0.1. space is actually 0.03m 
+    poselist = [[1.5, 1.5-s], [2.5, 1.5-s], [1-s, 2], [3.0+s, 2], [1.5, 2.5+s], [2.5, 2.5+s]]
     for i in range(0, 6):
         robot_name = f"block_robot_{i}"
         robot_desc = xacro.process_file(urdf, mappings={'name' : robot_name}).toxml()
@@ -63,7 +64,8 @@ def generate_launch_description():
         nodelist.append(DeclareLaunchArgument('object_x', default_value='[-1.0, 1.0, 1.0, -1.0]', description='object vertices (x)'))
         nodelist.append(DeclareLaunchArgument('object_y', default_value='[-0.5, -0.5, 0.5, 0.5]', description='object vertices (y)'))
 
-        nodelist.append(DeclareLaunchArgument(f'reallocate', default_value = 'True', description = 'redistributing or no'))
+        nodelist.append(DeclareLaunchArgument(f'reallocate', default_value = 'False', description = 'redistributing or no'))
+        nodelist.append(DeclareLaunchArgument(f'number', default_value = f'{str(i)}', description = 'number of block robot'))
         nodelist.append(
             Node(
                 namespace=robot_name,
