@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int32, Float32MultiArray, Int32MultiArray, Bool
 from example_interfaces.srv import AddTwoInts # couldnt figure out how to rospy service in ros 2
-import time 
+import time  
 
 class SwarmBroadcast(Node):
     def __init__(self):
@@ -63,24 +63,29 @@ class SwarmBroadcast(Node):
         same.data = last_way
         # same.data = all(i == self._waypoint_lens[0] for i in self._waypoint_lens)
         self._publisher.publish(same)
-        self._pub_occupancylist.publish(self._spots)
-        self._pub_pushlist.publish(self._push_spots)
+        spots = Int32MultiArray()
+        spots.data = self._spots
+        pushspots = Int32MultiArray()
+        pushspots.data = self._push_spots
+        self._pub_occupancylist.publish(spots)
+        self._pub_pushlist.publish(pushspots)
         # self.get_logger().info(f'allsame: {same.data}. waypoints: {self._waypoint_lens}')
+        # self.get_logger().info('getting messages')
 
     def _callback1(self, msg):
-        self._waypoint_lens[1] = msg.data
+        self._waypoint_lens[0] = msg.data
 
     def _callback2(self, msg):
-        self._waypoint_lens[2] = msg.data
+        self._waypoint_lens[1] = msg.data
 
     def _callback3(self, msg):
-        self._waypoint_lens[3] = msg.data
+        self._waypoint_lens[2] = msg.data
 
     def _callback4(self, msg):
-        self._waypoint_lens[4] = msg.data
+        self._waypoint_lens[3] = msg.data
 
     def _callback5(self, msg):
-        self._waypoint_lens[5] = msg.data
+        self._waypoint_lens[4] = msg.data
 
     def _callbackpushing0(self, msg):
         if msg.data:

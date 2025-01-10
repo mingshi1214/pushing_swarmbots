@@ -279,7 +279,7 @@ class SwarmRobot(Node):
 
     def _spots_callback(self, msg):
         self._spots = msg.data
-        if self._init_spot == -1:
+        if self._init_spot == -1 and self.number is not None:
             self._init_spot = self._spots.index(self.number)
 
     def _pushing_spots_callback(self, msg):
