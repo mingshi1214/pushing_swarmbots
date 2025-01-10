@@ -282,8 +282,8 @@ class SwarmRobot(Node):
     def _spots_callback(self, msg):
         self._spots = msg.data
         if self._init_spot == -1 and self.number is not None:
-            self.get_logger().info(f'box init spot: {self.number}')
             self._init_spot = self._spots.index(self.number)
+            self.get_logger().info(f'box init spot: {self._init_spot}')
 
     def _pushing_spots_callback(self, msg):
         self._pushing_spots = list(msg.data)
