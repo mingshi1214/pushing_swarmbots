@@ -220,6 +220,8 @@ class SwarmRobot(Node):
         self.declare_parameter('vel_gain', value=self._vel_gain)
         self.declare_parameter('object_x', value=self._x_object)
         self.declare_parameter('object_y', value=self._y_object)
+        self.declare_parameter('reallocate', value=self._reallocate)
+        self.declare_parameter('number', value=self.number)
 
         self._waypoints = assign_waypoints(self._x_list, self._y_list, self._t_list)
         self._waypoints_index = -1
@@ -250,6 +252,7 @@ class SwarmRobot(Node):
     def parameter_callback(self, params):
         self.get_logger().info(f'move_robot_to_goal parameter callback')
         for param in params:
+            self.get_logger().info(f'{param.name} {param.type_}')
             if param.name == 'goal_x' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
                 self._x_list = param.value
             elif param.name == 'goal_y' and param.type_ == Parameter.Type.DOUBLE_ARRAY:
@@ -300,6 +303,7 @@ class SwarmRobot(Node):
         # listen to odom 
         # this is essentially the main loop
         # assigns odom and box pose and goes to state machine
+        self.get_logger().info(f'number: {self.number}')
         pose = msg.pose.pose
 
         self._pose.x = pose.position.x
@@ -376,6 +380,7 @@ class SwarmRobot(Node):
         # if d_self2goal>d_box2goal:
         if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
             self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+            self.get_logger().info(f"reallocation. {self._reallocate}")
 
             # only go into reallocating state if we want it
             if self._reallocate == False:
@@ -384,10 +389,13 @@ class SwarmRobot(Node):
                 return
             else:
                 self._pushing = True
-                self._push_pub.publish(self._pushing)
+                pub = Bool()
+                pub.data = self._pushing
+                self._push_pub.publish(pub)
                 self._cur_state = FSM_STATES.REALLOCATING_BF_TRANS
         else:
-            self.get_logger().info(f"I am following.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+            self.get_logger().info(f"I am following.")
+            self.get_logger().info(f"reallocation. {self._reallocate}")
             if self._reallocate == False:
                 self._cur_state = FSM_STATES.FOLLOWING_TRANS
                 time.sleep(1.0)
@@ -395,12 +403,15 @@ class SwarmRobot(Node):
             else:
                 # reallocate before doing anything
                 self._pushing = False
-                self._push_pub.publish(self._pushing)
+                pub = Bool()
+                pub.data = self._pushing
+                self._push_pub.publish(pub)
                 self._cur_state = FSM_STATES.REALLOCATING_BF_TRANS
-
-        self._push_pub.publish(self._pushing)   
+        pub = Bool()
+        pub.data = self._pushing
+        self._push_pub.publish(pub)   
         time.sleep(1.0) # wait so that the pushing can happen first
-        self._push_pub.publish(self._pushing)
+        self._push_pub.publish(pub)
         return
     
     def _do_state_reallocation_bf_trans(self):

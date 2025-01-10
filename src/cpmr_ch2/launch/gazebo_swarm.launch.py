@@ -64,8 +64,8 @@ def generate_launch_description():
         nodelist.append(DeclareLaunchArgument('object_x', default_value='[-1.0, 1.0, 1.0, -1.0]', description='object vertices (x)'))
         nodelist.append(DeclareLaunchArgument('object_y', default_value='[-0.5, -0.5, 0.5, 0.5]', description='object vertices (y)'))
 
-        nodelist.append(DeclareLaunchArgument(f'reallocate', default_value = 'False', description = 'redistributing or no'))
-        nodelist.append(DeclareLaunchArgument(f'number', default_value = f'{str(i)}', description = 'number of block robot'))
+        nodelist.append(DeclareLaunchArgument(f'reallocate', default_value = 'true', description = 'redistributing or no'))
+        nodelist.append(DeclareLaunchArgument(f'number_{robot_name}', default_value = str(i), description = 'number of block robot'))
         nodelist.append(
             Node(
                 namespace=robot_name,
@@ -84,7 +84,9 @@ def generate_launch_description():
                 {'max_vel' : LaunchConfiguration(f'max_vel_{robot_name}')},
                 {'vel_gain' : LaunchConfiguration(f'vel_gain_{robot_name}')},
                 {'object_x' : LaunchConfiguration('object_x')},
-                {'object_y' : LaunchConfiguration('object_y')}
+                {'object_y' : LaunchConfiguration('object_y')},
+                {'reallocate' : LaunchConfiguration('reallocate')},
+                {'number' : LaunchConfiguration(f'number_{robot_name}')}
             ]
             )
         )
