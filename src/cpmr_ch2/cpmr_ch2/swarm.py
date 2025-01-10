@@ -240,9 +240,6 @@ class SwarmRobot(Node):
         self._waypoints_pub = self.create_publisher(Int32, "/complete_waypoint", 5)
         self._push_pub = self.create_publisher(Bool, "/pushing", 5)
 
-        # self._reallocate_cli = self.create_client(AddTwoInts, '/reallocate')
-        # while not self._reallocate_cli.wait_for_service(timeout_sec=1.0):
-        #     self.get_logger().info('service not available, waiting again...')
         self._req = AddTwoInts.Request()
         self._reallocate_client = MinimalClientAsync()
         
@@ -379,8 +376,6 @@ class SwarmRobot(Node):
         # d_box2goal = distance(self._box.x, self._box.y, self._robot_goal.x, self._robot_goal.y)
 
         #TODO maybe worth it to have it be able to transition between pushing and following? 
-        # (well if they do it right the first time, not necessary)
-        # if d_self2goal>d_box2goal:
         if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
             self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self.get_logger().info(f"reallocation. {self._reallocate}")
@@ -437,8 +432,9 @@ class SwarmRobot(Node):
             if len(indices) == 0:
                 return
 
-            # randomly choose a pushing robot and go either left or right of them lol
+            # randomly choose a pushing robot and go either left or right of them lol            
             #TODO this fails for sure if there is only pushing robots on the short end of the shape
+            #TODO would be better if they just go towards the closest pushing robot to themselves so it saves time
             left_right = random.choice([-1, 1])
             selected_rob = random.choice(indices)
             
