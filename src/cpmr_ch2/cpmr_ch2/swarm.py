@@ -418,6 +418,8 @@ class SwarmRobot(Node):
         if self._pushing:
             # do nothing if already pushing
             # self.get_logger().info(f"already pushing")
+            #TODO if we start with pushing, we don't really have a flag to stop reallocation
+            #   need a way to know that everyone is done.
             return
 
         if self._finding_spot:

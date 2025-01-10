@@ -32,6 +32,9 @@ class SwarmBroadcast(Node):
         # spots are where the robots are. numbers are the block robot numbers
         self._spots = [-1, 4, -1, -1, 5, -1, -1, 3, -1, -1, 1, -1, -1, 0, -1, -1, 2, -1]
         self._push_spots = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+        #TODO need to reset this to all -1 after reallocation is done. 
+        #TODO need to reset spots to original location also when rotation time
+
 
         self._srv = self.create_service(AddTwoInts, '/reallocate', self._reallocate_callback)
         self._pub_occupancylist = self.create_publisher(Int32MultiArray, "/taken_spots", 1)
