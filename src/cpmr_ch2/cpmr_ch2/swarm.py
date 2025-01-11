@@ -18,9 +18,11 @@ import random
 class FSM_STATES(Enum):
     START_TRANS = 'Start Translation',
     REALLOCATING_BF_TRANS = 'Reallocating before translation',
+    REALLOCATING_TRANS_DONE = 'Reallocating before translation done',
     PUSHING_TRANS = 'Pushing to translation goal',
     FOLLOWING_TRANS = 'Following the box translation',
     REALLOCATING_BF_ROT = 'Reallocating before rotation',
+    REALLOCATING_ROT_DONE = 'Reallocating before rotation done',
     START_ROT = 'Start Rotation',
     PUSHING_ROT = 'Pushing to rotation goal',
     FOLLOWING_ROT = 'Following the box rotation',
@@ -204,6 +206,7 @@ class SwarmRobot(Node):
         
         self._reallocate = False # redistributing to dif spots for better pushing
         self._finding_spot = True # finding a spot to reallocate to
+        self._all_robots_reallocate_done = False # stores whether all robots are done reallocating
         self._pushing = False
         self._spots = []
         self._pushing_spots = []
@@ -232,6 +235,7 @@ class SwarmRobot(Node):
         self._odom_sub = self.create_subscription(Odometry, "/odom", self._listener_callback, 5)
         self._obj_sub = self.create_subscription(ModelStates, "/gazebo/model_states", self._box_callback, 1)
         self._swarm_waypoints_sub = self.create_subscription(Int32, "/last_complete_waypoint", self._waypoints_callback, 1) # listening to see if everyone is at their positions for the current waypoint
+        self._realloc_sub = self.create_subscription(Bool, "/all_reallocating_complete", self._realloc_callback, 1)
         self._spots_sub = self.create_subscription(Int32MultiArray, "/taken_spots", self._spots_callback, 5)
         self._pushing_spots_sub = self.create_subscription(Int32MultiArray, "/pushing_spots", self._pushing_spots_callback, 5)
 
@@ -239,9 +243,12 @@ class SwarmRobot(Node):
         self._diagnosis_pub = self.create_publisher(String, "/diagnosis", 5)
         self._waypoints_pub = self.create_publisher(Int32, "/complete_waypoint", 5)
         self._push_pub = self.create_publisher(Bool, "/pushing", 5)
+        self._realloc_pub = self.create_publisher(Int32, "/reallocating", 5)
 
         self._req = AddTwoInts.Request()
         self._reallocate_client = MinimalClientAsync()
+
+        self._main_loop_timer = self.create_timer(0.5, self.main_loop)
         
 
         self._cnt = 0
@@ -299,6 +306,9 @@ class SwarmRobot(Node):
 
         # self.get_logger().info(f'box: {round(self._box.x,3)} {round(self._box.y, 3)} {round(self._box.t,3)}')
 
+    def _realloc_callback(self, msg):
+        self._all_robots_reallocate_done = msg.data
+
     def _listener_callback(self, msg):
         # listen to odom 
         # this is essentially the main loop
@@ -311,6 +321,7 @@ class SwarmRobot(Node):
         o = pose.orientation
         roll, pitch, self._pose.t = euler_from_quaternion(o)
 
+    def main_loop(self):
         # self.get_logger().info(f'going to state machine')
         #get index of last completed waypoint from current index
         way = Int32()
@@ -319,6 +330,18 @@ class SwarmRobot(Node):
         else:
             way.data = self._waypoints_index - 1 
         self._waypoints_pub.publish(way)
+
+        realloc_msg = Int32()
+        realloc_msg.data = 0
+        if (self._cur_state == FSM_STATES.REALLOCATING_TRANS_DONE):
+            realloc_msg.data = 1
+        elif (self._cur_state == FSM_STATES.REALLOCATING_ROT_DONE):
+            realloc_msg.data = 2
+        self._realloc_pub.publish(realloc_msg)
+
+        #TODO: add all the stuff to broadcast thing to handle this
+        #TODO: handle proper resetting on broadcast side (Team's messages)
+
         self._diagnosis()
         self._state_machine()
 
@@ -327,6 +350,8 @@ class SwarmRobot(Node):
             self._do_state_start_trans()
         elif self._cur_state == FSM_STATES.REALLOCATING_BF_TRANS:
             self._do_state_reallocation_bf_trans()
+        elif self._cur_state == FSM_STATES.REALLOCATING_TRANS_DONE:
+            self._do_state_reallocation_trans_done()
         elif self._cur_state == FSM_STATES.PUSHING_TRANS:
             self._do_state_pushing_trans()
         elif self._cur_state == FSM_STATES.FOLLOWING_TRANS:
@@ -335,6 +360,8 @@ class SwarmRobot(Node):
             self._do_state_start_rot()
         elif self._cur_state == FSM_STATES.REALLOCATING_BF_ROT:
             self._do_state_reallocation_bf_rot()
+        elif self._cur_state == FSM_STATES.REALLOCATING_ROT_DONE:
+            self._do_state_reallocation_rot_done()
         elif self._cur_state == FSM_STATES.PUSHING_ROT:
             self._do_state_pushing_rot()
         elif self._cur_state == FSM_STATES.FOLLOWING_ROT:
@@ -371,9 +398,6 @@ class SwarmRobot(Node):
         time.sleep(5.0)
 
         self._set_rob_goal()
-
-        # d_self2goal = distance(self._pose.x, self._pose.y,  self._robot_goal.x, self._robot_goal.y)
-        # d_box2goal = distance(self._box.x, self._box.y, self._robot_goal.x, self._robot_goal.y)
 
         #TODO maybe worth it to have it be able to transition between pushing and following? 
         if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
@@ -420,6 +444,7 @@ class SwarmRobot(Node):
             # self.get_logger().info(f"already pushing")
             #TODO if we start with pushing, we don't really have a flag to stop reallocation
             #   need a way to know that everyone is done.
+            self._cur_state = FSM_STATES.REALLOCATING_TRANS_DONE
             return
 
         if self._finding_spot:
@@ -468,22 +493,30 @@ class SwarmRobot(Node):
             if ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
             (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
                 # we are reallocated
-                self._finding_spot = True # set this back to true
-                self._set_rob_goal()
-                if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
-                    self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
-                    self._cur_state = FSM_STATES.PUSHING_TRANS
-                else:
-                    self.get_logger().info(f"I am following.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
-                    if self._reallocate == False:
-                        self._cur_state = FSM_STATES.FOLLOWING_TRANS
-
-                time.sleep(1.0)
+                self._cur_state = FSM_STATES.REALLOCATING_TRANS_DONE
                 return
 
             self._drive_to_goal(self._robot_goal)
 
         return
+    
+    def _do_state_reallocation_trans_done(self):
+        # d_self2goal = distance(self._pose.x, self._pose.y,  self._robot_goal.x, self._robot_goal.y)
+        # d_box2goal = distance(self._box.x, self._box.y, self._robot_goal.x, self._robot_goal.y)
+
+        if self._all_robots_reallocate_done:
+            #everybody else is done too and we can move on
+            self._finding_spot = True # set this back to true
+            self._set_rob_goal()
+            if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
+                self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+                self._cur_state = FSM_STATES.PUSHING_TRANS
+            else:
+                self.get_logger().info(f"I am following.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+                if self._reallocate == False:
+                    self._cur_state = FSM_STATES.FOLLOWING_TRANS
+
+            time.sleep(1.0)
     
     def _do_state_pushing_trans(self):
         if (((abs(self._box.x - (self._box_init.x + self._goal.x)) <= SwarmRobot.Object_Trans_Goal_Threshold) and 
@@ -552,7 +585,7 @@ class SwarmRobot(Node):
         if ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
             (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
                 # we are reallocated
-                self._cur_state = FSM_STATES.PUSHING_ROT
+                self._cur_state = FSM_STATES.REALLOCATING_ROT_DONE
         else:
             realloc_pose = SwarmRobot.Valid_Spots[self._init_spot]
             realloc_pose = rotate_point_about_origin(realloc_pose, self._box.t)
@@ -563,6 +596,10 @@ class SwarmRobot(Node):
 
             self._drive_to_goal(self._robot_goal)
         return
+    
+    def _do_state_reallocation_rot_done(self):
+        if self._all_robots_reallocate_done:
+            self._cur_state = FSM_STATES.PUSHING_ROT
 
     def _do_state_pushing_rot(self):
         # moved here. We want to check if our goal location has been hit for rotation instead of the box.

@@ -77,7 +77,8 @@ def generate_launch_description():
                             ('/cmd_vel', "/"+robot_name+"/cmd_vel"),
                             ('/diagnosis', "/"+robot_name+"/diagnosis"),
                             ('/complete_waypoint', "/"+robot_name+"/complete_waypoint"),
-                            ('/pushing', "/"+robot_name+"/pushing")],
+                            ('/pushing', "/"+robot_name+"/pushing"),
+                            ('/reallocating', "/"+robot_name+"/reallocating")],
                 parameters = [
                 {'goal_x' : LaunchConfiguration(f'goal_x_{robot_name}')},
                 {'goal_y' : LaunchConfiguration(f'goal_y_{robot_name}')},
