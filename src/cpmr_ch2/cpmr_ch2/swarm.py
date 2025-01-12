@@ -160,6 +160,7 @@ class SwarmRobot(Node):
     Rob_Pose_Threshold = 0.06 #m
     Object_Trans_Goal_Threshold = 0.1 #m
     Object_Rot_Goal_Threshold = 0.2 #rads
+    Rob_Pose_to_Checkpt_Threshold = 0.1
 
     Space_To_Box = 0.13
 
@@ -181,6 +182,12 @@ class SwarmRobot(Node):
                    Pose(-1-Space_To_Box, -0.8), 
                    Pose(-1-Space_To_Box, 0), 
                    Pose(-1-Space_To_Box, 0.8)]
+    
+    Realloc_Space = 1.0
+    Realloc_Checkpts = [Pose(-1 - Realloc_Space, 1),
+                        Pose(1 + Realloc_Space, 1),
+                        Pose(1 + Realloc_Space, -1),
+                        Pose(-1 - Realloc_Space, -1)]
 
 
     def __init__(self):
@@ -212,6 +219,8 @@ class SwarmRobot(Node):
         self._spots = []
         self._pushing_spots = []
         self._init_spot = -1
+        self._curr_checkpt = -1
+        self._checkpts_complete = False
 
         self._teams_completed_waypoint = -1
 
@@ -389,8 +398,58 @@ class SwarmRobot(Node):
         self._robot_goal.x = self._pose.x + self._goal.x
         self._robot_goal.y = self._pose.y + self._goal.y
 
+    def _drive_to_realloc(self):
+        if self._curr_checkpt == -1:
+            # have not started realloc yet. need to find closest checkpt rel to self and drive there
+            self._checkpts_complete = False
+            dists = []
+            for i in range(4):
+                #rotate pt first then translate
+                ck_pt_rel_world = rotate_point_about_origin(SwarmRobot.Realloc_Checkpts[i], self._box.t)
+                ck_pt_rel_world.x = self._box.x + ck_pt_rel_world.x
+                ck_pt_rel_world.y = self._box.y + ck_pt_rel_world.y
+
+                dists.append(distance(self._pose.x, self._pose.y, ck_pt_rel_world.x, ck_pt_rel_world.y))
+
+            self._curr_checkpt = dists.index(min(dists)) # closest checkpt
+            self.get_logger().info(f"closest checkpt {self._curr_checkpt}")
+
+        else:
+            if not self._checkpts_complete:
+                self.get_logger().info(f"going to checkpoint {self._curr_checkpt}")
+                ck_pt_rel_world = rotate_point_about_origin(SwarmRobot.Realloc_Checkpts[self._curr_checkpt], self._box.t)
+                ck_pt_rel_world.x = self._box.x + ck_pt_rel_world.x
+                ck_pt_rel_world.y = self._box.y + ck_pt_rel_world.y
+
+                if ((abs(self._pose.x - ck_pt_rel_world.x) <= SwarmRobot.Rob_Pose_to_Checkpt_Threshold) and 
+                (abs(self._pose.y - ck_pt_rel_world.y) <= SwarmRobot.Rob_Pose_to_Checkpt_Threshold)):
+                    # we are at curr checkpt
+                    self.get_logger().info(f"At checkpoint {self._curr_checkpt}")
+                    self._cmd_vel_pub.publish(Twist())
+                    if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
+                        # if intersects, go to next one
+                        if self._curr_checkpt == 3:
+                            self._curr_checkpt = 0
+                        else:
+                            self._curr_checkpt = self._curr_checkpt + 1
+                        self.get_logger().info(f"intersects. going to next checkpt {self._curr_checkpt}")
+                    else:
+                        # if not, drive to goal pose
+                        self.get_logger().info(f"does not intersect. going to robot goal {self._robot_goal.x} {self._robot_goal.y}")
+                        self._checkpts_complete = True
+                        self._cmd_vel_pub.publish(Twist())
+                        return
+                self._drive_to_goal(ck_pt_rel_world)
+                return
+            else:
+                self._drive_to_goal(self._robot_goal)
+        self._drive_to_goal(self._robot_goal)    
+        return  
+
     def _do_state_start_up(self):
-        # wait for box, pose, and init_spot
+        # wait for box, pose, spots and init_spot
+        if len(self._spots) == 0:
+            return
 
         if self._init_spot == -1 and self.number is not None:
             self._init_spot = self._spots.index(self.number)
@@ -490,7 +549,7 @@ class SwarmRobot(Node):
             if response.sum == 1:
                 self._finding_spot = False
                 # reallocation is correct. now we go to spot
-                self.get_logger().info(f"relocation spot found")
+                self.get_logger().info(f"relocation spot found {spot}")
                 # rotate spot by box angle
                 realloc_pose = SwarmRobot.Valid_Spots[spot]
                 realloc_pose = rotate_point_about_origin(realloc_pose, self._box.t)
@@ -502,15 +561,19 @@ class SwarmRobot(Node):
             # go to the spot we chose --> now it's robot_goal
             # need to figure out how to avoid box and not just go in straight line lol
             #TODO avoid box and other bots
-            self.get_logger().info(f"go to relocation spot")
+            # self.get_logger().info(f"go to relocation spot {self._robot_goal.x} {self._robot_goal.y}")
 
             if ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
             (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
                 # we are reallocated
+                self._cmd_vel_pub.publish(Twist())
+                self._curr_checkpt == -1 # reset this for next one
+                self._checkpts_complete = False
                 self._cur_state = FSM_STATES.REALLOCATING_TRANS_DONE
                 return
 
-            self._drive_to_goal(self._robot_goal)
+            # self._drive_to_goal(self._robot_goal)
+            self._drive_to_realloc()
 
         return
     
@@ -608,7 +671,8 @@ class SwarmRobot(Node):
             self._robot_goal.x = realloc_pose.x + self._box.x
             self._robot_goal.y = realloc_pose.y + self._box.y
 
-            self._drive_to_goal(self._robot_goal)
+            # self._drive_to_goal(self._robot_goal)
+            self._drive_to_realloc()
         return
     
     def _do_state_reallocation_rot_done(self):

@@ -38,6 +38,7 @@ class SwarmBroadcast(Node):
 
         # spots are where the robots are. numbers are the block robot numbers
         self._spots = [-1, 4, -1, -1, 5, -1, -1, 3, -1, -1, 1, -1, -1, 0, -1, -1, 2, -1]
+        self._spots_init = self._spots.copy()
         self._push_spots = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
         #TODO need to reset this to all -1 after reallocation is done. 
         #TODO need to reset spots to original location also when rotation time
@@ -159,6 +160,9 @@ class SwarmBroadcast(Node):
         else:
             # only send true if they are all in the same realloc done state
             all_realloc_msg.data = all(self._all_realloc_done[0] == is_done for is_done in self._all_realloc_done)
+            self._spots = self._spots_init.copy()
+            self._push_spots = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
         self._pub_all_realloc_complete.publish(all_realloc_msg)
 
 
