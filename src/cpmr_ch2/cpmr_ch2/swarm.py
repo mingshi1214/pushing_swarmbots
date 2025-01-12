@@ -170,28 +170,28 @@ class SwarmRobot(Node):
                    Pose(0.2, 0.5+Space_To_Box),
                    Pose(0.5,0.5+Space_To_Box), 
                    Pose(0.8, 0.5+Space_To_Box), 
-                   Pose(1+Space_To_Box, 0.2), 
+                   Pose(1+Space_To_Box, 0.35), 
                    Pose(1+Space_To_Box, 0.0), 
-                   Pose(1+Space_To_Box, -0.2), 
+                   Pose(1+Space_To_Box, -0.35), 
                    Pose(0.8, -0.5-Space_To_Box), 
                    Pose(0.5, -0.5-Space_To_Box), 
                    Pose(0.2, -0.5-Space_To_Box), 
                    Pose(-0.2, -0.5-Space_To_Box), 
                    Pose(-0.5, -0.5-Space_To_Box), 
                    Pose(-0.8, -0.5-Space_To_Box),
-                   Pose(-1-Space_To_Box, -0.2), 
+                   Pose(-1-Space_To_Box, -0.35), 
                    Pose(-1-Space_To_Box, 0), 
-                   Pose(-1-Space_To_Box, 0.2)]
+                   Pose(-1-Space_To_Box, 0.35)]
     
     Realloc_Space = 1.0
     Realloc_Checkpts = [Pose(-1 - Realloc_Space, 0.5 + Realloc_Space), 
-                        Pose(0 - Realloc_Space, 0.5 + Realloc_Space), 
-                        Pose(0 + Realloc_Space, 0.5 + Realloc_Space), 
+                        Pose(0.5 - Realloc_Space, 0.5 + Realloc_Space), 
+                        Pose(-0.5 + Realloc_Space, 0.5 + Realloc_Space), 
                         Pose(1 + Realloc_Space, 0.5 + Realloc_Space),
                         Pose(1 + Realloc_Space, 0),
                         Pose(1 + Realloc_Space, -0.5 - Realloc_Space),
-                        Pose(0 + Realloc_Space, -0.5 - Realloc_Space),
-                        Pose(0 - Realloc_Space, -0.5 - Realloc_Space),
+                        Pose(-0.5 + Realloc_Space, -0.5 - Realloc_Space),
+                        Pose(0.5 - Realloc_Space, -0.5 - Realloc_Space),
                         Pose(-1 - Realloc_Space, -0.5 - Realloc_Space),
                         Pose(-1 - Realloc_Space, 0)]
 
