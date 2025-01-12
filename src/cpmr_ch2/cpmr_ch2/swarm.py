@@ -184,10 +184,16 @@ class SwarmRobot(Node):
                    Pose(-1-Space_To_Box, 0.2)]
     
     Realloc_Space = 1.0
-    Realloc_Checkpts = [Pose(-1 - Realloc_Space, 1),
-                        Pose(1 + Realloc_Space, 1),
-                        Pose(1 + Realloc_Space, -1),
-                        Pose(-1 - Realloc_Space, -1)]
+    Realloc_Checkpts = [Pose(-1 - Realloc_Space, 0.5 + Realloc_Space), 
+                        Pose(0 - Realloc_Space, 0.5 + Realloc_Space), 
+                        Pose(0 + Realloc_Space, 0.5 + Realloc_Space), 
+                        Pose(1 + Realloc_Space, 0.5 + Realloc_Space),
+                        Pose(1 + Realloc_Space, 0),
+                        Pose(1 + Realloc_Space, -0.5 - Realloc_Space),
+                        Pose(0 + Realloc_Space, -0.5 - Realloc_Space),
+                        Pose(0 - Realloc_Space, -0.5 - Realloc_Space),
+                        Pose(-1 - Realloc_Space, -0.5 - Realloc_Space),
+                        Pose(-1 - Realloc_Space, 0)]
 
 
     def __init__(self):
@@ -221,6 +227,7 @@ class SwarmRobot(Node):
         self._init_spot = -1
         self._curr_checkpt = -1
         self._checkpts_complete = False
+        self._goal_checkpt = -1
 
         self._teams_completed_waypoint = -1
 
@@ -402,16 +409,19 @@ class SwarmRobot(Node):
         if self._curr_checkpt == -1:
             # have not started realloc yet. need to find closest checkpt rel to self and drive there
             self._checkpts_complete = False
-            dists = []
-            for i in range(4):
+            dists_2_self = []
+            dists_2_goal = []
+            for i in range(len(SwarmRobot.Realloc_Checkpts)):
                 #rotate pt first then translate
                 ck_pt_rel_world = rotate_point_about_origin(SwarmRobot.Realloc_Checkpts[i], self._box.t)
                 ck_pt_rel_world.x = self._box.x + ck_pt_rel_world.x
                 ck_pt_rel_world.y = self._box.y + ck_pt_rel_world.y
 
-                dists.append(distance(self._pose.x, self._pose.y, ck_pt_rel_world.x, ck_pt_rel_world.y))
+                dists_2_self.append(distance(self._pose.x, self._pose.y, ck_pt_rel_world.x, ck_pt_rel_world.y))
+                dists_2_goal.append(distance(self._robot_goal.x, self._robot_goal.y, ck_pt_rel_world.x, ck_pt_rel_world.y))
 
-            self._curr_checkpt = dists.index(min(dists)) # closest checkpt
+            self._curr_checkpt = dists_2_self.index(min(dists_2_self)) # closest checkpt
+            self._goal_checkpt = dists_2_goal.index(min(dists_2_goal)) # closest checkpt
             self.get_logger().info(f"closest checkpt {self._curr_checkpt}")
 
         else:
@@ -426,16 +436,16 @@ class SwarmRobot(Node):
                     # we are at curr checkpt
                     self.get_logger().info(f"At checkpoint {self._curr_checkpt}")
                     self._cmd_vel_pub.publish(Twist())
-                    if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
-                        # if intersects, go to next one
-                        if self._curr_checkpt == 3:
+                    if self._curr_checkpt != self._goal_checkpt:
+                        # if not at goal checkpt, go to next one
+                        if self._curr_checkpt == (len(SwarmRobot.Realloc_Checkpts) -1):
                             self._curr_checkpt = 0
                         else:
                             self._curr_checkpt = self._curr_checkpt + 1
-                        self.get_logger().info(f"intersects. going to next checkpt {self._curr_checkpt}")
+                        self.get_logger().info(f"not at goal checkpt. going to next checkpt {self._curr_checkpt}")
                     else:
                         # if not, drive to goal pose
-                        self.get_logger().info(f"does not intersect. going to robot goal {self._robot_goal.x} {self._robot_goal.y}")
+                        self.get_logger().info(f"at goal checkpt. going to robot goal {self._robot_goal.x} {self._robot_goal.y}")
                         self._checkpts_complete = True
                         self._cmd_vel_pub.publish(Twist())
                         return
@@ -567,7 +577,7 @@ class SwarmRobot(Node):
             (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
                 # we are reallocated
                 self._cmd_vel_pub.publish(Twist())
-                self._curr_checkpt == -1 # reset this for next one
+                self._curr_checkpt = -1 # reset this for next one
                 self._checkpts_complete = False
                 self._cur_state = FSM_STATES.REALLOCATING_TRANS_DONE
                 return
@@ -656,14 +666,8 @@ class SwarmRobot(Node):
             self._cur_state = FSM_STATES.PUSHING_ROT
         else:
             self._cur_state = FSM_STATES.REALLOCATING_BF_ROT
-
-    def _do_state_reallocation_bf_rot(self):
-        #TODO avoid box and other bots
-        if ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
-            (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
-                # we are reallocated
-                self._cur_state = FSM_STATES.REALLOCATING_ROT_DONE
-        else:
+            # set robot goal rel to box rn
+            self.get_logger().info(f"goal: init spot {self._init_spot}")
             realloc_pose = SwarmRobot.Valid_Spots[self._init_spot]
             realloc_pose = rotate_point_about_origin(realloc_pose, self._box.t)
 
@@ -671,12 +675,23 @@ class SwarmRobot(Node):
             self._robot_goal.x = realloc_pose.x + self._box.x
             self._robot_goal.y = realloc_pose.y + self._box.y
 
+
+    def _do_state_reallocation_bf_rot(self):
+        #TODO avoid box and other bots
+        if ((abs(self._pose.x - self._robot_goal.x) <= SwarmRobot.Rob_Pose_Threshold) and 
+            (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
+                # we are reallocated
+                self.get_logger().info("rotation realloc complete, switching to waiting for everyone else")
+                self._cur_state = FSM_STATES.REALLOCATING_ROT_DONE
+                self._cmd_vel_pub.publish(Twist())
+        else:
             # self._drive_to_goal(self._robot_goal)
             self._drive_to_realloc()
         return
     
     def _do_state_reallocation_rot_done(self):
         if self._all_robots_reallocate_done:
+            self.get_logger().info("everyone is done reallocating. rotating now.")
             self._cur_state = FSM_STATES.PUSHING_ROT
 
     def _do_state_pushing_rot(self):
@@ -691,6 +706,7 @@ class SwarmRobot(Node):
             # get next waypoint before saying the waypoint is done so we wait for everyone else to be ready for the next one.
             # this lessens length of our waypoint list so that everyone else has to be done their current waypoint before 
             # all_at_waypoint is true
+            self._cmd_vel_pub.publish(Twist())
             self.get_logger().info(f"rotation complete, switching to waiting for everyone else: {self._teams_completed_waypoint}")
             self._cur_state = FSM_STATES.WAYPOINT_DONE
             return
