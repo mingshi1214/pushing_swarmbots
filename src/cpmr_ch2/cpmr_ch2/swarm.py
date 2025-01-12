@@ -16,6 +16,7 @@ from example_interfaces.srv import AddTwoInts
 import random
 
 class FSM_STATES(Enum):
+    START_UP = 'wait until all necessary messages are recieved before startup'
     START_TRANS = 'Start Translation',
     REALLOCATING_BF_TRANS = 'Reallocating before translation',
     REALLOCATING_TRANS_DONE = 'Reallocating before translation done',
@@ -196,7 +197,7 @@ class SwarmRobot(Node):
 
         self._pose = Pose()
         self._pose_rel_box = Pose()
-        self._cur_state = FSM_STATES.START_TRANS
+        self._cur_state = FSM_STATES.START_UP
         self._start_time = self.get_clock().now().nanoseconds * 1e-9
 
         self._box = Pose(2.0, 2.0, 0.0)
@@ -288,9 +289,6 @@ class SwarmRobot(Node):
 
     def _spots_callback(self, msg):
         self._spots = msg.data
-        if self._init_spot == -1 and self.number is not None:
-            self._init_spot = self._spots.index(self.number)
-            self.get_logger().info(f'box init spot: {self._init_spot}')
 
     def _pushing_spots_callback(self, msg):
         self._pushing_spots = list(msg.data)
@@ -346,7 +344,9 @@ class SwarmRobot(Node):
         self._state_machine()
 
     def _state_machine(self):
-        if self._cur_state == FSM_STATES.START_TRANS:
+        if self._cur_state == FSM_STATES.START_UP:
+            self._do_state_start_up()
+        elif self._cur_state == FSM_STATES.START_TRANS:
             self._do_state_start_trans()
         elif self._cur_state == FSM_STATES.REALLOCATING_BF_TRANS:
             self._do_state_reallocation_bf_trans()
@@ -389,6 +389,20 @@ class SwarmRobot(Node):
         self._robot_goal.x = self._pose.x + self._goal.x
         self._robot_goal.y = self._pose.y + self._goal.y
 
+    def _do_state_start_up(self):
+        # wait for box, pose, and init_spot
+
+        if self._init_spot == -1 and self.number is not None:
+            self._init_spot = self._spots.index(self.number)
+            self.get_logger().info(f'box init spot: {self._init_spot}')
+        else:
+            # init_pose assigned.
+            if (self._pose.x != 0 and self._pose.y != 0 and self._box.x != 0 and self._box.y != 0):
+                # okay to start trans
+                self._cur_state = FSM_STATES.START_TRANS
+            
+        return 
+
     def _do_state_start_trans(self):
         # determine if they will push or if they will follow
         # if distance from self to goal > dist of box to goal then we push
@@ -401,7 +415,7 @@ class SwarmRobot(Node):
 
         #TODO maybe worth it to have it be able to transition between pushing and following? 
         if self._object.does_line_intersect_object([self._pose.x, self._pose.y], [self._robot_goal.x, self._robot_goal.y], self._box):
-            self.get_logger().info(f"I am pushing.")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
+            self.get_logger().info(f"I am pushing. self: {self._pose.x} {self._pose.y}, robot: {self._robot_goal.x}, {self._robot_goal.y} box: {self._box.x}, {self._box.y}")# me2goal: {d_self2goal}, box2goal: {d_box2goal}")
             self.get_logger().info(f"reallocation. {self._reallocate}")
 
             # only go into reallocating state if we want it
@@ -416,7 +430,7 @@ class SwarmRobot(Node):
                 self._push_pub.publish(pub)
                 self._cur_state = FSM_STATES.REALLOCATING_BF_TRANS
         else:
-            self.get_logger().info(f"I am following.")
+            self.get_logger().info(f"I am following. self: {self._pose.x} {self._pose.y}, robot: {self._robot_goal.x}, {self._robot_goal.y} box: {self._box.x}, {self._box.y}")
             self.get_logger().info(f"reallocation. {self._reallocate}")
             if self._reallocate == False:
                 self._cur_state = FSM_STATES.FOLLOWING_TRANS
