@@ -162,26 +162,26 @@ class SwarmRobot(Node):
     Object_Rot_Goal_Threshold = 0.2 #rads
     Rob_Pose_to_Checkpt_Threshold = 0.1
 
-    Space_To_Box = 0.13
+    Space_To_Box = 0.11
 
-    Valid_Spots = [Pose(-0.8, 1+Space_To_Box), 
-                   Pose(-0.5, 1+Space_To_Box), 
-                   Pose(-0.2, 1+Space_To_Box), 
-                   Pose(0.2, 1+Space_To_Box),
-                   Pose(0.5,1+Space_To_Box), 
-                   Pose(0.8, 1+Space_To_Box), 
-                   Pose(1+Space_To_Box, 0.8), 
+    Valid_Spots = [Pose(-0.8, 0.5+Space_To_Box), 
+                   Pose(-0.5, 0.5+Space_To_Box), 
+                   Pose(-0.2, 0.5+Space_To_Box), 
+                   Pose(0.2, 0.5+Space_To_Box),
+                   Pose(0.5,0.5+Space_To_Box), 
+                   Pose(0.8, 0.5+Space_To_Box), 
+                   Pose(1+Space_To_Box, 0.2), 
                    Pose(1+Space_To_Box, 0.0), 
-                   Pose(1+Space_To_Box, -0.8), 
-                   Pose(0.8, -1-Space_To_Box), 
-                   Pose(0.5, -1-Space_To_Box), 
-                   Pose(0.2, -1-Space_To_Box), 
-                   Pose(-0.2, -1-Space_To_Box), 
-                   Pose(-0.5, -1-Space_To_Box), 
-                   Pose(-0.8, -1-Space_To_Box),
-                   Pose(-1-Space_To_Box, -0.8), 
+                   Pose(1+Space_To_Box, -0.2), 
+                   Pose(0.8, -0.5-Space_To_Box), 
+                   Pose(0.5, -0.5-Space_To_Box), 
+                   Pose(0.2, -0.5-Space_To_Box), 
+                   Pose(-0.2, -0.5-Space_To_Box), 
+                   Pose(-0.5, -0.5-Space_To_Box), 
+                   Pose(-0.8, -0.5-Space_To_Box),
+                   Pose(-1-Space_To_Box, -0.2), 
                    Pose(-1-Space_To_Box, 0), 
-                   Pose(-1-Space_To_Box, 0.8)]
+                   Pose(-1-Space_To_Box, 0.2)]
     
     Realloc_Space = 1.0
     Realloc_Checkpts = [Pose(-1 - Realloc_Space, 1),
