@@ -453,7 +453,6 @@ class SwarmRobot(Node):
                 return
             else:
                 self._drive_to_goal(self._robot_goal)
-        self._drive_to_goal(self._robot_goal)    
         return  
 
     def _do_state_start_up(self):
@@ -692,6 +691,11 @@ class SwarmRobot(Node):
     def _do_state_reallocation_rot_done(self):
         if self._all_robots_reallocate_done:
             self.get_logger().info("everyone is done reallocating. rotating now.")
+            
+            # update the initial distance from box and maintain it
+            self._pose_rel_box.x = self._box.x - self._pose.x
+            self._pose_rel_box.y = self._box.y - self._pose.y
+
             self._cur_state = FSM_STATES.PUSHING_ROT
 
     def _do_state_pushing_rot(self):
