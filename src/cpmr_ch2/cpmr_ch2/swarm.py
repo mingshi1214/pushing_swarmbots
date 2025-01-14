@@ -162,7 +162,7 @@ class SwarmRobot(Node):
     Object_Rot_Goal_Threshold = 0.2 #rads
     Rob_Pose_to_Checkpt_Threshold = 0.1
 
-    Space_To_Box = 0.11
+    Space_To_Box = 0.05
 
     Valid_Spots = [Pose(-0.8, 0.5+Space_To_Box), 
                    Pose(-0.5, 0.5+Space_To_Box), 
@@ -265,7 +265,7 @@ class SwarmRobot(Node):
         self._req = AddTwoInts.Request()
         self._reallocate_client = MinimalClientAsync()
 
-        self._main_loop_timer = self.create_timer(0.5, self.main_loop)
+        self._main_loop_timer = self.create_timer(0.1, self.main_loop)
         
 
         self._cnt = 0
@@ -438,10 +438,20 @@ class SwarmRobot(Node):
                     self._cmd_vel_pub.publish(Twist())
                     if self._curr_checkpt != self._goal_checkpt:
                         # if not at goal checkpt, go to next one
-                        if self._curr_checkpt == (len(SwarmRobot.Realloc_Checkpts) -1):
-                            self._curr_checkpt = 0
-                        else:
-                            self._curr_checkpt = self._curr_checkpt + 1
+                        self._curr_checkpt = (self._curr_checkpt + 1) % len(SwarmRobot.Realloc_Checkpts)
+
+                        # mid_checkpt = (self._goal_checkpt + (len(SwarmRobot.Realloc_Checkpts) // 2)) % len(SwarmRobot.Realloc_Checkpts)
+                        # choosing the shortest direction
+                        # if mid_checkpt < self._goal_checkpt:
+                        #     if ((self._curr_checkpt < self._goal_checkpt) and (self._curr_checkpt >= mid_checkpt)):
+                        #         self._curr_checkpt = (self._curr_checkpt + 1) % len(SwarmRobot.Realloc_Checkpts)
+                        #     else:
+                        #         self._curr_checkpt = (self._curr_checkpt - 1) % len(SwarmRobot.Realloc_Checkpts)
+                        # else: 
+                        #     if ((self._curr_checkpt <= mid_checkpt) and (self._curr_checkpt > self._goal_checkpt)):
+                        #         self._curr_checkpt = (self._curr_checkpt - 1) % len(SwarmRobot.Realloc_Checkpts)
+                        #     else:
+                        #         self._curr_checkpt = (self._curr_checkpt + 1) % len(SwarmRobot.Realloc_Checkpts)
                         self.get_logger().info(f"not at goal checkpt. going to next checkpt {self._curr_checkpt}")
                     else:
                         # if not, drive to goal pose
