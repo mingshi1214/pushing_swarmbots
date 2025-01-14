@@ -566,6 +566,10 @@ class SwarmRobot(Node):
                 # add translation and this is goal location
                 self._robot_goal.x = realloc_pose.x + self._box.x
                 self._robot_goal.y = realloc_pose.y + self._box.y
+
+                # reset these before starting to do reallocation movement
+                self._curr_checkpt = -1
+                self._checkpts_complete = False
         else:
             # go to the spot we chose --> now it's robot_goal
             # need to figure out how to avoid box and not just go in straight line lol
@@ -576,8 +580,6 @@ class SwarmRobot(Node):
             (abs(self._pose.y - self._robot_goal.y) <= SwarmRobot.Rob_Pose_Threshold)):
                 # we are reallocated
                 self._cmd_vel_pub.publish(Twist())
-                self._curr_checkpt = -1 # reset this for next one
-                self._checkpts_complete = False
                 self._cur_state = FSM_STATES.REALLOCATING_TRANS_DONE
                 return
 
@@ -673,6 +675,10 @@ class SwarmRobot(Node):
             # add translation and this is goal location
             self._robot_goal.x = realloc_pose.x + self._box.x
             self._robot_goal.y = realloc_pose.y + self._box.y
+
+            # reset these before starting to do reallocation movement
+            self._curr_checkpt = -1
+            self._checkpts_complete = False
 
 
     def _do_state_reallocation_bf_rot(self):
